@@ -28,6 +28,7 @@ pub struct OracleStakers {
     pub oracle: Oracle,
     query: Option<Value>,
     server_resp: Option<Value>,
+    id: Option<String>,
 }
 
 impl OracleStakers {
@@ -37,21 +38,25 @@ impl OracleStakers {
                 oracle: Oracle::USDS,
                 query: None,
                 server_resp: None,
+                id: None,
             },
             "dai" => OracleStakers {
                 oracle: Oracle::DAI,
                 query: None,
                 server_resp: None,
+                id: None,
             },
             "steth" => OracleStakers {
                 oracle: Oracle::STETH,
                 query: None,
                 server_resp: None,
+                id: None,
             },
             _ => OracleStakers {
                 oracle: Oracle::Unknown,
                 query: None,
                 server_resp: None,
+                id: None,
             },
         }
     }
@@ -125,7 +130,20 @@ impl OracleStakers {
         let res: Value = serde_json::from_str(&req)?;
         Ok(res)
     }
-    pub fn id(&self) -> Result<String, Error> {
+    pub fn id(&mut self) -> Result<String, Error> {
+        if self.id.is_none() {
+            let _ = self.set_id();
+        }
+
+        Ok(self
+            .clone()
+            .id
+            .ok_or(anyhow!("error while retrieving the message id"))?)
+    }
+    fn set_id(&mut self) -> Result<String, Error> {
+        if self.id.is_some() {
+            return Err(anyhow!("error: message id is already set"));
+        };
         let res = self.server_resp.clone().ok_or(anyhow!(
             "error: no gql server response was made successfully"
         ))?;
@@ -139,6 +157,7 @@ impl OracleStakers {
             .and_then(|v| v.as_str())
             .ok_or(anyhow!("error: no ao message id found for the given query"))?;
 
+        self.id = Some(msg_id.to_string());
         Ok(msg_id.to_string())
     }
 }
