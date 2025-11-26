@@ -4,7 +4,7 @@ use crate::constants::{
 use anyhow::{Error, anyhow};
 use serde_json::{Value, json};
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum Oracle {
     USDS,
     DAI,
@@ -22,9 +22,12 @@ impl Oracle {
         }
     }
 }
+
+#[derive(Debug, Clone)]
 pub struct OracleStakers {
     pub oracle: Oracle,
     query: Option<Value>,
+    server_resp: Option<Value>,
 }
 
 impl OracleStakers {
@@ -33,18 +36,22 @@ impl OracleStakers {
             "usds" => OracleStakers {
                 oracle: Oracle::USDS,
                 query: None,
+                server_resp: None,
             },
             "dai" => OracleStakers {
                 oracle: Oracle::DAI,
                 query: None,
+                server_resp: None,
             },
             "steth" => OracleStakers {
                 oracle: Oracle::STETH,
                 query: None,
+                server_resp: None,
             },
             _ => OracleStakers {
                 oracle: Oracle::Unknown,
                 query: None,
+                server_resp: None,
             },
         }
     }
@@ -101,7 +108,7 @@ impl OracleStakers {
 
         let body = json!({
             "query": query,
-            "variables": vars // ignored on server leve but kept for future compatibility with other services
+            "variables": vars // ignored on server level but kept for future compatibility with other gateways
         });
 
         self.query = Some(body);
@@ -117,5 +124,21 @@ impl OracleStakers {
             .read_to_string()?;
         let res: Value = serde_json::from_str(&req)?;
         Ok(res)
+    }
+    pub fn id(&self) -> Result<String, Error> {
+        let res = self.server_resp.clone().ok_or(anyhow!(
+            "error: no gql server response was made successfully"
+        ))?;
+        let msg_id = res
+            .get("data")
+            .and_then(|v| v.get("transactions"))
+            .and_then(|v| v.get("edges"))
+            .and_then(|v| v.get(0))
+            .and_then(|v| v.get("node"))
+            .and_then(|v| v.get("id"))
+            .and_then(|v| v.as_str())
+            .ok_or(anyhow!("error: no ao message id found for the given query"))?;
+
+        Ok(msg_id.to_string())
     }
 }
