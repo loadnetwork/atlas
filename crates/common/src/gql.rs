@@ -67,14 +67,14 @@ impl OracleStakers {
         };
 
         let template = r#"
-            query GetDetailedTransactions($owner: String!, $oracle: String!) {
+            query GetDetailedTransactions {
     transactions(
         first: 1
         sort: HEIGHT_DESC
-        owners: [$ownervar]
+        owners: ["$ownervar"]
         tags: [
         { name: "Action", values: ["Set-Balances"] },
-        {name: "From-Process", values: [$oraclevar]}
+        {name: "From-Process", values: ["$oraclevar"]}
         ]
     ) {
         edges {
@@ -106,6 +106,8 @@ impl OracleStakers {
             .replace("$ownervar", AO_AUTHORITY)
             .replace("$oraclevar", &self.oracle.resolve());
 
+        println!("QUERY: {:?}", query);
+
         let vars = json!({
             "owner": AO_AUTHORITY,
             "oracle": self.oracle.resolve()
@@ -121,14 +123,15 @@ impl OracleStakers {
         Ok(self)
     }
 
-    pub fn send(&self) -> Result<Value, Error> {
+    pub fn send(&mut self) -> Result<&mut Self, Error> {
         let url = format!("{ARWEAVE_GATEWAY}/graphql");
         let req = ureq::post(url)
             .send_json(self.query.clone())?
             .body_mut()
             .read_to_string()?;
         let res: Value = serde_json::from_str(&req)?;
-        Ok(res)
+        self.server_resp = Some(res);
+        Ok(self)
     }
     pub fn id(&mut self) -> Result<String, Error> {
         if self.id.is_none() {
@@ -159,5 +162,18 @@ impl OracleStakers {
 
         self.id = Some(msg_id.to_string());
         Ok(msg_id.to_string())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::gql::OracleStakers;
+    #[test]
+    fn test_oracle_stakers() {
+        let mut oracle = OracleStakers::new("usds");
+        let res = oracle.build().unwrap().send().unwrap();
+        let id = oracle.id().unwrap();
+        println!("ORACLE ID: {id}");
+        assert_eq!(id.len(), 43);
     }
 }
