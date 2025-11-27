@@ -71,10 +71,10 @@ impl OracleStakers {
     transactions(
         first: 1
         sort: HEIGHT_DESC
-        owners: [$owner]
+        owners: [$ownervar]
         tags: [
         { name: "Action", values: ["Set-Balances"] },
-        {name: "From-Process", values: [$oracle]}
+        {name: "From-Process", values: [$oraclevar]}
         ]
     ) {
         edges {
@@ -103,8 +103,8 @@ impl OracleStakers {
 
         // formatting as arweave.net doesnt support dynamic vars on server level
         let query = template
-            .replace("$owner", AO_AUTHORITY)
-            .replace("$oracle", &self.oracle.resolve());
+            .replace("$ownervar", AO_AUTHORITY)
+            .replace("$oraclevar", &self.oracle.resolve());
 
         let vars = json!({
             "owner": AO_AUTHORITY,
