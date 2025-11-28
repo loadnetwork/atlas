@@ -1,0 +1,17 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde = {workspace = true}
+serde_json = {workspace = true}
+anyhow = {workspace = true}
+common = {path = "../common"}
+flp = {path = "../flp"}
+axum = "0.8.4"
+tokio = {version = "1.47.1", features = ["full"] }
+axum-extra = { version = "0.12.2", features = ["multipart"] }
+tower = "0.5.2"
+tower-http = { version = "0.6.6", features = ["cors", "limit"] }
+tokio-util = "0.7.16"
