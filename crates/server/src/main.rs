@@ -24,8 +24,8 @@ async fn main() {
         .layer(DefaultBodyLimit::max(REQ_SIZE_LIMIT))
         .layer(RequestBodyLimitLayer::new(REQ_SIZE_LIMIT))
         .layer(cors);
-
-    let port = std::env::var("SERVER_PORT").unwrap_or_else(|_| "3000".to_string());
+    // 12 titans :D
+    let port = std::env::var("SERVER_PORT").unwrap_or_else(|_| "1212".to_string());
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
         .unwrap();
