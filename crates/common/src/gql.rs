@@ -1,6 +1,6 @@
 use crate::constants::{
-    AO_AUTHORITY, ARWEAVE_GATEWAY, DAI_ORACLE_PID, DELEGATION_PID, STETH_ORACLE_PID,
-    USDS_ORACLE_PID,
+    AO_AUTHORITY, ARWEAVE_GATEWAY, DAI_ORACLE_PID, DAI_STAKING_ADDRESS, DELEGATION_PID,
+    STETH_ORACLE_PID, STETH_STAKING_ADDRESS, USDS_ORACLE_PID, USDS_STAKING_ADDRESS,
 };
 use crate::projects::PI_PID;
 use anyhow::{Error, anyhow};
@@ -15,6 +15,12 @@ pub enum Oracle {
     Unknown,
 }
 
+#[derive(PartialEq, Clone, Debug)]
+pub struct OracleMetadata {
+    pub ao_pid: String,
+    pub evm_address: String,
+}
+
 impl Oracle {
     pub fn resolve(&self) -> String {
         match self {
@@ -25,6 +31,24 @@ impl Oracle {
                 format!("[\"{USDS_ORACLE_PID}\", \"{DAI_ORACLE_PID}\", \"{STETH_ORACLE_PID}\"]")
             }
             &Oracle::Unknown => String::new(),
+        }
+    }
+
+    pub fn metadata(&self) -> Result<OracleMetadata, Error> {
+        match self {
+            Oracle::USDS => Ok(OracleMetadata {
+                ao_pid: USDS_ORACLE_PID.to_string(),
+                evm_address: USDS_STAKING_ADDRESS.to_string(),
+            }),
+            Oracle::DAI => Ok(OracleMetadata {
+                ao_pid: DAI_ORACLE_PID.to_string(),
+                evm_address: DAI_STAKING_ADDRESS.to_string(),
+            }),
+            Oracle::STETH => Ok(OracleMetadata {
+                ao_pid: STETH_ORACLE_PID.to_string(),
+                evm_address: STETH_STAKING_ADDRESS.to_string(),
+            }),
+            _ => Err(anyhow!("metadata not supported for this oracle type")),
         }
     }
 }
