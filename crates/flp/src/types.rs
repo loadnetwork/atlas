@@ -19,6 +19,6 @@ pub struct DelegationsRes {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SetBalancesData {
     pub eoa: String,
-    pub amount: u128,
+    pub amount: String,
     pub ar_address: String,
 }
