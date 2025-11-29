@@ -1,12 +1,19 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct WalletDelegations {
-    #[serde(rename = "walletFrom")]
-    pub wallet_from: String,
-    #[serde(rename = "walletTo")]
     pub wallet_to: String,
     pub factor: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DelegationsRes {
+    #[serde(rename = "_key")]
+    pub key: String,
+    pub last_update: u64,
+    pub delegation_prefs: Vec<WalletDelegations>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
