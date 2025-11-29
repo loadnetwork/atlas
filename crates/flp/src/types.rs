@@ -1,4 +1,7 @@
+use common::projects::PI_PID;
 use serde::{Deserialize, Serialize};
+
+pub const MAX_FACTOR: u32 = 10000;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -7,12 +10,14 @@ pub struct WalletDelegations {
     pub factor: u32,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DelegationsRes {
     #[serde(rename = "_key")]
-    pub key: String,
-    pub last_update: u64,
+    pub key: Option<String>, // newer version
+    pub last_update: Option<u64>,
+    pub total_factor: Option<u32>,
+    pub wallet: Option<String>,
     pub delegation_prefs: Vec<WalletDelegations>,
 }
 
@@ -21,4 +26,20 @@ pub struct SetBalancesData {
     pub eoa: String,
     pub amount: String,
     pub ar_address: String,
+}
+
+impl DelegationsRes {
+    pub fn pi_default(address: &str) -> Self {
+        let preference = WalletDelegations {
+            wallet_to: PI_PID.to_string(),
+            factor: MAX_FACTOR,
+        };
+        DelegationsRes {
+            key: Some(format!("base_{address}")),
+            last_update: None,
+            total_factor: Some(MAX_FACTOR),
+            wallet: Some(address.to_string()),
+            delegation_prefs: vec![preference],
+        }
+    }
 }
