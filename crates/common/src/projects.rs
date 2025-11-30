@@ -18,7 +18,6 @@ pub const PIXL_PID: &str = "3eZ6_ry6FD9CB58ImCQs6Qx_rJdDUGhz-D2W1AqzHD8";
 pub const VELA_PID: &str = "8TRsYFzbhp97Er5bFJL4Xofa4Txv4fv8S0szEscqopU";
 pub const INF_PID: &str = "LnFIQUwAdMZ9LEWlfQ7VZ3zJOW-0p8Irc_2gAVshs3w";
 
-
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Project {
     pub name: String,
@@ -57,4 +56,28 @@ impl Project {
     project!(vela, "Vela", "VELA", VELA_PID);
     project!(inf, "Influence Market", "INF", INF_PID);
     // todo! add more active FLPs if any
+}
+
+impl Project {
+    pub fn is_flp_project(pid: &str) -> bool {
+        matches!(
+            pid,
+            PI_PID
+                | LOAD_PID
+                | APUS_PID
+                | BOTG_PID
+                | AOS_PID
+                | WNDR_PID
+                | ACTION_PID
+                | SMONEY_PID
+                | LQD_PID
+                | GAME_PID
+                | NAU_PID
+                | RELLA_PID
+                | ARIO_PID
+                | PIXL_PID
+                | VELA_PID
+                | INF_PID
+        )
+    }
 }

@@ -10,4 +10,4 @@ pub const AO_AUTHORITY: &str = "fcoN_xJeisVsPXA-trzVAuIiqO3ydLQxM-L4XbrQKzY";
 pub const DELEGATION_PID: &str = "cuxSKjGJ-WDB9PzSkVkVVrIBSh3DrYHYz44usQOj5yE";
 
 // endpoints
-pub const ARWEAVE_GATEWAY: &str = "https://arweave.net";
+pub const ARWEAVE_GATEWAY: &str = "https://permagate.io";

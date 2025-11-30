@@ -17,7 +17,8 @@ impl Config {
             env::var("CLICKHOUSE_URL").unwrap_or_else(|_| "http://localhost:8123".into());
         let clickhouse_user = env::var("CLICKHOUSE_USER").unwrap_or_else(|_| "default".into());
         let clickhouse_password = env::var("CLICKHOUSE_PASSWORD").unwrap_or_default();
-        let clickhouse_database = env::var("CLICKHOUSE_DATABASE").unwrap_or_else(|_| "default".into());
+        let clickhouse_database =
+            env::var("CLICKHOUSE_DATABASE").unwrap_or_else(|_| "default".into());
         let interval = env::var("ORACLE_REFRESH_SECS")
             .ok()
             .and_then(|v| v.parse::<u64>().ok())
