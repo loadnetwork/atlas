@@ -88,13 +88,14 @@ impl Indexer {
             };
             let amount_str = amount_dec.to_string();
             println!(
-                "wallet {} ticker {} balance {}",
-                entry.ar_address, ticker_owned, amount_str
+                "wallet {} eoa {} ticker {} balance {}",
+                entry.ar_address, entry.eoa, ticker_owned, amount_str
             );
             balance_rows.push(WalletBalanceRow {
                 ts: now,
                 ticker: ticker_owned.clone(),
                 wallet: entry.ar_address.clone(),
+                eoa: entry.eoa.clone(),
                 amount: amount_str.clone(),
                 tx_id: tx_id.clone(),
             });
@@ -110,13 +111,19 @@ impl Indexer {
                         continue;
                     }
                     println!(
-                        "wallet {} ticker {} project {} factor {} delegated {}",
-                        entry.ar_address, ticker_owned, pref.wallet_to, pref.factor, delegated
+                        "wallet {} eoa {} ticker {} project {} factor {} delegated {}",
+                        entry.ar_address,
+                        entry.eoa,
+                        ticker_owned,
+                        pref.wallet_to,
+                        pref.factor,
+                        delegated
                     );
                     position_rows.push(FlpPositionRow {
                         ts: now,
                         ticker: ticker_owned.clone(),
                         wallet: entry.ar_address.clone(),
+                        eoa: entry.eoa.clone(),
                         project: pref.wallet_to,
                         factor: pref.factor,
                         amount: delegated.to_string(),

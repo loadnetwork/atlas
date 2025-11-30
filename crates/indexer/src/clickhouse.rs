@@ -31,11 +31,18 @@ impl Clickhouse {
         self.admin.query(&create_db).execute().await?;
         let stmts = [
             "create table if not exists oracle_snapshots(ts DateTime64(3), ticker String, tx_id String) engine=MergeTree order by (ticker, ts)",
-            "create table if not exists wallet_balances(ts DateTime64(3), ticker String, wallet String, amount String, tx_id String) engine=ReplacingMergeTree order by (ticker, wallet, ts)",
+            "create table if not exists wallet_balances(ts DateTime64(3), ticker String, wallet String, eoa String, amount String, tx_id String) engine=ReplacingMergeTree order by (ticker, wallet, ts)",
             "create table if not exists wallet_delegations(ts DateTime64(3), wallet String, payload String) engine=ReplacingMergeTree order by (wallet, ts)",
-            "create table if not exists flp_positions(ts DateTime64(3), ticker String, wallet String, project String, factor UInt32, amount String) engine=ReplacingMergeTree order by (project, wallet, ts)",
+            "create table if not exists flp_positions(ts DateTime64(3), ticker String, wallet String, eoa String, project String, factor UInt32, amount String) engine=ReplacingMergeTree order by (project, wallet, ts)",
         ];
         for stmt in stmts {
+            self.client.query(stmt).execute().await?;
+        }
+        let alters = [
+            "alter table wallet_balances add column if not exists eoa String after wallet",
+            "alter table flp_positions add column if not exists eoa String after wallet",
+        ];
+        for stmt in alters {
             self.client.query(stmt).execute().await?;
         }
         Ok(())
@@ -101,6 +108,7 @@ pub struct WalletBalanceRow {
     pub ts: DateTime<Utc>,
     pub ticker: String,
     pub wallet: String,
+    pub eoa: String,
     pub amount: String,
     pub tx_id: String,
 }
@@ -119,6 +127,7 @@ pub struct FlpPositionRow {
     pub ts: DateTime<Utc>,
     pub ticker: String,
     pub wallet: String,
+    pub eoa: String,
     pub project: String,
     pub factor: u32,
     pub amount: String,
