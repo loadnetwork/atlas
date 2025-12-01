@@ -1,4 +1,4 @@
-use crate::errors::ServerError;
+use crate::{errors::ServerError, indexer::AtlasIndexerClient};
 use axum::{Json, extract::Path};
 use common::gql::OracleStakers;
 use flp::set_balances::parse_flp_balances_setting_res;
@@ -27,4 +27,12 @@ pub async fn get_oracle_data_handler(
     let last_update = oracle.last_update()?;
     let set_balances_parsed_data = parse_flp_balances_setting_res(&last_update)?;
     Ok(Json(serde_json::to_value(&set_balances_parsed_data)?))
+}
+
+pub async fn get_flp_snapshot_handler(
+    Path(project): Path<String>,
+) -> Result<Json<Value>, ServerError> {
+    let client = AtlasIndexerClient::new()?;
+    let snapshot = client.latest_project_snapshot(&project).await?;
+    Ok(Json(serde_json::to_value(snapshot)?))
 }

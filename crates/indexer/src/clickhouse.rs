@@ -43,6 +43,7 @@ impl Clickhouse {
             "alter table wallet_balances add column if not exists ar_balance String after amount",
             "alter table flp_positions add column if not exists eoa String after wallet",
             "alter table flp_positions add column if not exists ar_amount String after amount",
+            "alter table flp_positions modify column project String",
         ];
         for stmt in alters {
             self.client.query(stmt).execute().await?;

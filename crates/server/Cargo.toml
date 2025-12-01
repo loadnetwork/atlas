@@ -15,3 +15,5 @@ axum-extra = { version = "0.12.2", features = ["multipart"] }
 tower = "0.5.2"
 tower-http = { version = "0.6.6", features = ["cors", "limit"] }
 tokio-util = "0.7.16"
+clickhouse = { version = "0.13.0", features = ["chrono"] }
+chrono = "0.4.42"
