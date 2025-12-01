@@ -77,9 +77,11 @@ fn aggregate_totals(rows: &[FlpPositionRow]) -> Vec<ProjectTotal> {
             ticker: row.ticker.clone(),
             amount: 0.0,
             ar_amount: 0.0,
+            delegators_count: 0,
         });
         entry.amount += row.amount.parse::<f64>().unwrap_or(0.0);
         entry.ar_amount += row.ar_amount.parse::<f64>().unwrap_or(0.0);
+        entry.delegators_count += 1;
     }
     map.into_values().collect()
 }
@@ -111,6 +113,7 @@ pub struct ProjectSnapshot {
 pub struct ProjectTotal {
     pub ticker: String,
     pub amount: f64,
+    pub delegators_count: u32,
     pub ar_amount: f64,
 }
 

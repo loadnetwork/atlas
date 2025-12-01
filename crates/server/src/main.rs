@@ -24,6 +24,7 @@ async fn main() {
             get(get_wallet_delegations_handler),
         )
         .route("/oracle/{ticker}", get(get_oracle_data_handler))
+        // returns the direct delegation data per FLP ID: LSTs + AR -- factored data
         .route("/flp/delegators/{project}", get(get_flp_snapshot_handler))
         .layer(DefaultBodyLimit::max(REQ_SIZE_LIMIT))
         .layer(RequestBodyLimitLayer::new(REQ_SIZE_LIMIT))
