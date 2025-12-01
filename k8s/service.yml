@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: load-atlas
+  namespace: business
+  labels:
+    app: load-atlas
+spec:
+  type: ClusterIP
+  selector:
+    app: load-atlas
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8000

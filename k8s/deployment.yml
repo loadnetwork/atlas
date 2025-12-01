@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load-atlas
+  namespace: business
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: load-atlas
+  template:
+    metadata:
+      labels:
+        app: load-atlas
+    spec:
+      containers:
+        - name: load-atlas
+          image: localhost:5000/load-atlas:latest
+          ports:
+            - containerPort: 8000
+          securityContext:
+            runAsUser: 0
+          envFrom:
+            - secretRef:
+                name: load-atlas-secret
