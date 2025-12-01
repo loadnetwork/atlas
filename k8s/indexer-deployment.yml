@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load-atlas-indexer
+  namespace: business
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: load-atlas-indexer
+  template:
+    metadata:
+      labels:
+        app: load-atlas-indexer
+    spec:
+      containers:
+        - name: load-atlas-indexer
+          image: localhost:5000/load-atlas:latest
+          command: ["cargo", "run", "--bin", "indexer"]
+          securityContext:
+            runAsUser: 0
+          envFrom:
+            - secretRef:
+                name: load-atlas-secret
