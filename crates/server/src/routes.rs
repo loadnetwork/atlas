@@ -3,7 +3,7 @@ use axum::{Json, extract::Path};
 use common::gql::OracleStakers;
 use flp::set_balances::parse_flp_balances_setting_res;
 use flp::wallet::get_wallet_delegations;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 pub async fn handle_route() -> Json<Value> {
     Json(serde_json::json!({
@@ -49,4 +49,16 @@ pub async fn get_ar_wallet_identity(
     let client = AtlasIndexerClient::new()?;
     let identities = client.wallet_identity_history(&address).await?;
     Ok(Json(serde_json::to_value(&identities)?))
+}
+
+pub async fn get_oracle_feed(Path(ticker): Path<String>) -> Result<Json<Value>, ServerError> {
+    let client = AtlasIndexerClient::new()?;
+    let feed = client.oracle_snapshot_feed(&ticker, 25).await?;
+    let metadata = OracleStakers::new(&ticker).oracle.metadata()?;
+    let res = json!({
+        "oracle_pid": metadata.ao_pid,
+        "oracle_evm_address": metadata.evm_address,
+        "recent_indexed_feeds": feed
+    });
+    Ok(Json(res))
 }

@@ -98,6 +98,33 @@ impl AtlasIndexerClient {
             .await?;
         Ok(rows.into_iter().map(|row| row.into()).collect())
     }
+
+    pub async fn oracle_snapshot_feed(
+        &self,
+        ticker: &str,
+        limit: u64,
+    ) -> Result<Vec<OracleSnapshot>, Error> {
+        let rows = self
+            .client
+            .query(
+                "select o.ts, o.ticker, o.tx_id, sum(toFloat64(p.amount)) as total, uniqExact(p.wallet) as delegators \
+                 from oracle_snapshots o \
+                 left join flp_positions p \
+                   on p.ticker = o.ticker and p.ts = o.ts \
+                 where o.ticker = ? \
+                 group by o.ts, o.ticker, o.tx_id \
+                 order by o.ts desc \
+                 limit ?",
+            )
+            .bind(ticker)
+            .bind(limit)
+            .fetch_all::<OracleSnapshot>()
+            .await?;
+        if rows.is_empty() {
+            return Err(anyhow!("no oracle snapshots found for ticker {ticker}"));
+        }
+        Ok(rows)
+    }
 }
 
 fn aggregate_totals(rows: &[FlpPositionRow]) -> Vec<ProjectTotal> {
@@ -181,4 +208,14 @@ pub struct IdentityLink {
     pub eoa: String,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub ts: DateTime<Utc>,
+}
+
+#[derive(Row, serde::Deserialize, Serialize, Clone)]
+pub struct OracleSnapshot {
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    pub ts: DateTime<Utc>,
+    pub ticker: String,
+    pub tx_id: String,
+    pub total: f64,
+    pub delegators: u64,
 }
