@@ -1,6 +1,6 @@
 use crate::routes::{
     get_ar_wallet_identity, get_eoa_wallet_identity, get_flp_snapshot_handler,
-    get_oracle_data_handler, get_wallet_delegations_handler, handle_route, get_oracle_feed
+    get_oracle_data_handler, get_oracle_feed, get_wallet_delegations_handler, handle_route,
 };
 use axum::{Router, extract::DefaultBodyLimit, routing::get};
 use common::env::get_env_var;
