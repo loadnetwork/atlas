@@ -68,6 +68,36 @@ impl AtlasIndexerClient {
             delegators,
         })
     }
+
+    pub async fn wallet_identity_history(&self, wallet: &str) -> Result<Vec<IdentityLink>, Error> {
+        let rows = self
+            .client
+            .query(
+                "select wallet, eoa, ts \
+                 from wallet_balances \
+                 where wallet = ? \
+                 order by ts desc",
+            )
+            .bind(wallet)
+            .fetch_all::<IdentityRow>()
+            .await?;
+        Ok(rows.into_iter().map(|row| row.into()).collect())
+    }
+
+    pub async fn eoa_identity_history(&self, eoa: &str) -> Result<Vec<IdentityLink>, Error> {
+        let rows = self
+            .client
+            .query(
+                "select wallet, eoa, ts \
+                 from wallet_balances \
+                 where eoa = ? \
+                 order by ts desc",
+            )
+            .bind(eoa)
+            .fetch_all::<IdentityRow>()
+            .await?;
+        Ok(rows.into_iter().map(|row| row.into()).collect())
+    }
 }
 
 fn aggregate_totals(rows: &[FlpPositionRow]) -> Vec<ProjectTotal> {
@@ -101,6 +131,24 @@ struct FlpPositionRow {
     ar_amount: String,
 }
 
+#[derive(Row, serde::Deserialize)]
+struct IdentityRow {
+    wallet: String,
+    eoa: String,
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    ts: DateTime<Utc>,
+}
+
+impl From<IdentityRow> for IdentityLink {
+    fn from(value: IdentityRow) -> Self {
+        IdentityLink {
+            wallet: value.wallet,
+            eoa: value.eoa,
+            ts: value.ts,
+        }
+    }
+}
+
 #[derive(Serialize)]
 pub struct ProjectSnapshot {
     pub project: String,
@@ -125,4 +173,12 @@ pub struct Delegator {
     pub factor: u32,
     pub amount: String,
     pub ar_amount: String,
+}
+
+#[derive(Serialize, Clone)]
+pub struct IdentityLink {
+    pub wallet: String,
+    pub eoa: String,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub ts: DateTime<Utc>,
 }

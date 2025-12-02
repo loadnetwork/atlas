@@ -36,3 +36,17 @@ pub async fn get_flp_snapshot_handler(
     let snapshot = client.latest_project_snapshot(&project).await?;
     Ok(Json(serde_json::to_value(snapshot)?))
 }
+
+pub async fn get_eoa_wallet_identity(Path(eoa): Path<String>) -> Result<Json<Value>, ServerError> {
+    let client = AtlasIndexerClient::new()?;
+    let identities = client.eoa_identity_history(&eoa).await?;
+    Ok(Json(serde_json::to_value(&identities)?))
+}
+
+pub async fn get_ar_wallet_identity(
+    Path(address): Path<String>,
+) -> Result<Json<Value>, ServerError> {
+    let client = AtlasIndexerClient::new()?;
+    let identities = client.wallet_identity_history(&address).await?;
+    Ok(Json(serde_json::to_value(&identities)?))
+}

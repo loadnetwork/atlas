@@ -1,9 +1,10 @@
 use crate::routes::{
-    get_flp_snapshot_handler, get_oracle_data_handler, get_wallet_delegations_handler, handle_route,
+    get_ar_wallet_identity, get_eoa_wallet_identity, get_flp_snapshot_handler,
+    get_oracle_data_handler, get_wallet_delegations_handler, handle_route,
 };
 use axum::{Router, extract::DefaultBodyLimit, routing::get};
-use tower_http::{cors::CorsLayer, limit::RequestBodyLimitLayer};
 use common::env::get_env_var;
+use tower_http::{cors::CorsLayer, limit::RequestBodyLimitLayer};
 
 const REQ_SIZE_LIMIT: usize = 50 * 1024 * 1024; // 50 MB
 
@@ -20,9 +21,15 @@ async fn main() {
 
     let router = Router::new()
         .route("/", get(handle_route))
+        // wallet operations
         .route(
             "/wallet/delegations/{address}",
             get(get_wallet_delegations_handler),
+        )
+        .route("/wallet/identity/eoa/{eoa}", get(get_eoa_wallet_identity))
+        .route(
+            "/wallet/identity/ar-wallet/{address}",
+            get(get_ar_wallet_identity),
         )
         .route("/oracle/{ticker}", get(get_oracle_data_handler))
         // returns the direct delegation data per FLP ID: LSTs + AR -- factored data
