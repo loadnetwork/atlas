@@ -247,7 +247,7 @@ mod test {
         assert_eq!(id.len(), 3);
     }
     #[test]
-    fn test_get_user_deleation() {
+    fn test_get_user_delegation() {
         let address = "vZY2XY1RD9HIfWi8ift-1_DnHLDadZMWrufSh-_rKF0";
         let last_id = get_user_last_delegation_txid(address).unwrap();
         println!("LAST DELEGATION ID {last_id}");

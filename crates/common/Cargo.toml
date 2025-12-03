@@ -7,5 +7,5 @@ edition = "2024"
 ureq = {workspace = true}
 anyhow = {workspace = true}
 serde_json = {workspace = true}
-serde = {workspace = true}
+serde = {workspace = true, features = ["derive"]}
 dotenvy = {workspace = true}
