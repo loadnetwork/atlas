@@ -2,7 +2,7 @@ use anyhow::Result;
 use chrono::Utc;
 use common::{gateway::get_ar_balance, gql::OracleStakers, projects::Project};
 use flp::{
-    set_balances::parse_flp_balances_setting_res,
+    csv_parser::parse_flp_balances_setting_res,
     types::{DelegationsRes, MAX_FACTOR, SetBalancesData},
     wallet::get_wallet_delegations,
 };

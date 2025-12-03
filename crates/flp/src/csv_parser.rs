@@ -21,7 +21,7 @@ pub fn parse_flp_balances_setting_res(txid: &str) -> Result<Vec<SetBalancesData>
 #[cfg(test)]
 
 mod tests {
-    use crate::set_balances::parse_flp_balances_setting_res;
+    use crate::csv_parser::parse_flp_balances_setting_res;
     use common::gql::OracleStakers;
 
     #[test]

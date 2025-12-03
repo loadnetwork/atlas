@@ -10,6 +10,14 @@ pub struct WalletDelegations {
     pub factor: u32,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DelegationMappingsRow {
+    pub wallet_from: String,
+    pub wallet_to: String,
+    pub factor: u32
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DelegationsRes {

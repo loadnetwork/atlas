@@ -1,7 +1,7 @@
 use crate::{errors::ServerError, indexer::AtlasIndexerClient};
 use axum::{Json, extract::Path};
 use common::gql::OracleStakers;
-use flp::set_balances::parse_flp_balances_setting_res;
+use flp::csv_parser::parse_flp_balances_setting_res;
 use flp::wallet::get_wallet_delegations;
 use serde_json::{Value, json};
 

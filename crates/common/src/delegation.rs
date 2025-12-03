@@ -65,7 +65,7 @@ pub fn get_user_delegation_txid(last_delegation_txid: &str) -> Result<String, Er
         .and_then(|v| v.get("node"))
         .and_then(|v| v.get("id"))
         .and_then(|v| v.as_str())
-        .ok_or(anyhow!("error: error accessing delegation msg id"))?;
+        .ok_or(anyhow!("error: error accessing user delegation msg id"))?;
 
     Ok(id.to_string())
 }
@@ -128,7 +128,7 @@ pub fn get_user_last_delegation_txid(address: &str) -> Result<String, Error> {
         .and_then(|v| v.as_str())
         // default to the PI address as if a wallet has no Set-Delegation message record
         // the FLP bridge system default for 100% of delegation preference to $PI
-        .ok_or(anyhow!("error: error accessing delegation msg id"))
+        .ok_or(anyhow!("error: error accessing last delegation msg id"))
         .unwrap_or(PI_PID);
 
     Ok(id.to_string())
@@ -193,7 +193,7 @@ query GetDetailedTransactions {
         .and_then(|v| v.get("node"))
         .and_then(|v| v.get("id"))
         .and_then(|v| v.as_str())
-        .ok_or(anyhow!("error: error accessing delegation msg id"))?;
+        .ok_or(anyhow!("error: error accessing delegation mappings msg id"))?;
 
     Ok(id.to_string())
 }
