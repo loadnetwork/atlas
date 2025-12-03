@@ -164,6 +164,34 @@ impl AtlasIndexerClient {
         out.sort_by(|a, b| b.height.cmp(&a.height));
         Ok(out)
     }
+
+    pub async fn latest_delegation_heights(
+        &self,
+        limit: u64,
+    ) -> Result<Vec<DelegationHeight>, Error> {
+        let rows = self
+            .client
+            .query(
+                "select height, tx_id \
+                 from delegation_mappings \
+                 group by height, tx_id \
+                 order by height desc \
+                 limit ?",
+            )
+            .bind(limit)
+            .fetch_all::<DelegationHeightRow>()
+            .await?;
+        if rows.is_empty() {
+            return Err(anyhow!("no delegation mappings indexed yet"));
+        }
+        Ok(rows
+            .into_iter()
+            .map(|row| DelegationHeight {
+                height: row.height,
+                tx_id: row.tx_id,
+            })
+            .collect())
+    }
 }
 
 async fn ensure_schema(
@@ -314,4 +342,16 @@ pub struct DelegationMappingHistory {
 pub struct DelegationPreference {
     pub wallet_to: String,
     pub factor: u32,
+}
+
+#[derive(Row, serde::Deserialize)]
+struct DelegationHeightRow {
+    height: u32,
+    tx_id: String,
+}
+
+#[derive(Serialize, Clone)]
+pub struct DelegationHeight {
+    pub height: u32,
+    pub tx_id: String,
 }

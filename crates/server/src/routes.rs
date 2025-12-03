@@ -1,12 +1,13 @@
 use crate::{
     errors::ServerError,
-    indexer::{AtlasIndexerClient, DelegationMappingHistory},
+    indexer::{AtlasIndexerClient, DelegationHeight, DelegationMappingHistory},
 };
-use axum::{Json, extract::Path};
+use axum::{Json, extract::{Path, Query}};
 use common::gql::OracleStakers;
 use flp::csv_parser::parse_flp_balances_setting_res;
 use flp::wallet::get_wallet_delegations;
 use serde_json::{Value, json};
+use std::collections::HashMap;
 
 pub async fn handle_route() -> Json<Value> {
     Json(serde_json::json!({
@@ -73,4 +74,17 @@ pub async fn get_wallet_delegation_mappings_history(
     let history: Vec<DelegationMappingHistory> =
         client.wallet_delegation_mappings(&address).await?;
     Ok(Json(serde_json::to_value(&history)?))
+}
+
+pub async fn get_delegation_mapping_heights(
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, ServerError> {
+    let limit = params
+        .get("limit")
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(25);
+    let client = AtlasIndexerClient::new().await?;
+    let rows: Vec<DelegationHeight> = client.latest_delegation_heights(limit).await?;
+    Ok(Json(serde_json::to_value(&rows)?))
 }
