@@ -1,11 +1,11 @@
 use anyhow::Result;
 use chrono::Utc;
 use common::delegation::{
-    get_delegation_mappings, DelegationMappingMeta, DelegationMappingsPage,
-    DELEGATION_PID_START_HEIGHT,
+    DELEGATION_PID_START_HEIGHT, DelegationMappingMeta, DelegationMappingsPage,
+    get_delegation_mappings,
 };
 use flp::csv_parser::parse_delegation_mappings_res;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 use crate::clickhouse::{Clickhouse, DelegationMappingRow};
 

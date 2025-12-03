@@ -1,7 +1,7 @@
 use anyhow::Result;
 use chrono::Utc;
 use common::{
-    delegation::{get_delegation_mappings, DelegationMappingMeta, DelegationMappingsPage},
+    delegation::{DelegationMappingMeta, DelegationMappingsPage, get_delegation_mappings},
     gateway::get_ar_balance,
     gql::OracleStakers,
     projects::Project,
@@ -175,11 +175,7 @@ impl Indexer {
         let Some(meta) = page.mappings.into_iter().next() else {
             return Ok(());
         };
-        if self
-            .clickhouse
-            .has_delegation_mapping(&meta.tx_id)
-            .await?
-        {
+        if self.clickhouse.has_delegation_mapping(&meta.tx_id).await? {
             return Ok(());
         }
         println!(
@@ -192,14 +188,9 @@ impl Indexer {
         Ok(())
     }
 
-    async fn store_delegation_mapping(
-        &self,
-        meta: &DelegationMappingMeta,
-    ) -> Result<()> {
+    async fn store_delegation_mapping(&self, meta: &DelegationMappingMeta) -> Result<()> {
         let rows = build_mapping_rows(meta).await?;
-        self.clickhouse
-            .insert_delegation_mappings(&rows)
-            .await?;
+        self.clickhouse.insert_delegation_mappings(&rows).await?;
         Ok(())
     }
 }
@@ -250,13 +241,10 @@ async fn load_ar_balance(address: String) -> Decimal {
 }
 
 async fn fetch_latest_mapping_page(limit: u32) -> Result<DelegationMappingsPage> {
-    Ok(tokio::task::spawn_blocking(move || get_delegation_mappings(Some(limit), None))
-        .await??)
+    Ok(tokio::task::spawn_blocking(move || get_delegation_mappings(Some(limit), None)).await??)
 }
 
-async fn build_mapping_rows(
-    meta: &DelegationMappingMeta,
-) -> Result<Vec<DelegationMappingRow>> {
+async fn build_mapping_rows(meta: &DelegationMappingMeta) -> Result<Vec<DelegationMappingRow>> {
     let tx_id = meta.tx_id.clone();
     let height = meta.height;
     let csv_rows = tokio::task::spawn_blocking({

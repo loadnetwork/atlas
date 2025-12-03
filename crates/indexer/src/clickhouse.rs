@@ -88,7 +88,12 @@ impl Clickhouse {
 
     pub async fn has_delegation_mapping(&self, tx_id: &str) -> Result<bool> {
         let query = "select count() as cnt from delegation_mappings where tx_id = ? limit 1";
-        let row = self.client.query(query).bind(tx_id).fetch_one::<CountRow>().await?;
+        let row = self
+            .client
+            .query(query)
+            .bind(tx_id)
+            .fetch_one::<CountRow>()
+            .await?;
         Ok(row.cnt > 0)
     }
 

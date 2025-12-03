@@ -220,20 +220,21 @@ $afterclause
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let edges = txs
-        .get("edges")
-        .and_then(|v| v.as_array())
-        .ok_or(anyhow!(
-            "error: no ao message edges found for the delegation mappings query"
-        ))?;
+    let edges = txs.get("edges").and_then(|v| v.as_array()).ok_or(anyhow!(
+        "error: no ao message edges found for the delegation mappings query"
+    ))?;
     let mut out = Vec::new();
     let mut last_cursor = None;
     for edge in edges {
         if let Some(cursor) = edge.get("cursor").and_then(|v| v.as_str()) {
             last_cursor = Some(cursor.to_string());
         }
-        let Some(node) = edge.get("node") else { continue };
-        let Some(id) = node.get("id").and_then(|v| v.as_str()) else { continue };
+        let Some(node) = edge.get("node") else {
+            continue;
+        };
+        let Some(id) = node.get("id").and_then(|v| v.as_str()) else {
+            continue;
+        };
         let height = node
             .get("block")
             .and_then(|v| v.get("height"))
@@ -255,7 +256,6 @@ $afterclause
         end_cursor: last_cursor,
     })
 }
-
 
 #[cfg(test)]
 mod tests {
