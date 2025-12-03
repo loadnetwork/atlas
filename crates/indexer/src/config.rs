@@ -19,7 +19,7 @@ impl Config {
         let clickhouse_user = get_env_var("CLICKHOUSE_USER").unwrap_or_else(|_| "default".into());
         let clickhouse_password = get_env_var("CLICKHOUSE_PASSWORD").unwrap_or_default();
         let clickhouse_database =
-            get_env_var("CLICKHOUSE_DATABASE").unwrap_or_else(|_| "default".into());
+            get_env_var("CLICKHOUSE_DATABASE").unwrap_or_else(|_| "atlas_oracles".into());
         let interval = get_env_var("ORACLE_REFRESH_SECS")
             .ok()
             .and_then(|v| v.parse::<u64>().ok())
