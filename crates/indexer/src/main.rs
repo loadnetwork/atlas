@@ -1,3 +1,4 @@
+mod backfill;
 mod clickhouse;
 mod config;
 mod indexer;

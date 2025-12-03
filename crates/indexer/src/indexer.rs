@@ -17,6 +17,7 @@ use serde_json::to_string;
 use std::str::FromStr;
 
 use crate::{
+    backfill,
     clickhouse::{
         Clickhouse, DelegationMappingRow, FlpPositionRow, OracleSnapshotRow, WalletBalanceRow,
         WalletDelegationRow,
@@ -36,6 +37,7 @@ impl Indexer {
 
     pub async fn run(&self) -> Result<()> {
         self.clickhouse.ensure().await?;
+        self.spawn_backfill();
         println!("indexer ready with tickers {:?}", self.config.tickers);
         self.run_once().await?;
         let mut interval = tokio::time::interval(self.config.interval);
@@ -55,6 +57,15 @@ impl Indexer {
             self.index_ticker(ticker).await?;
         }
         Ok(())
+    }
+
+    fn spawn_backfill(&self) {
+        let clickhouse = self.clickhouse.clone();
+        tokio::spawn(async move {
+            if let Err(err) = backfill::run(clickhouse).await {
+                eprintln!("delegation backfill error: {err:?}");
+            }
+        });
     }
 
     async fn index_ticker(&self, ticker: &str) -> Result<()> {
