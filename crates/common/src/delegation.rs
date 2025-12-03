@@ -4,7 +4,7 @@ use anyhow::{Error, anyhow};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-pub(crate) const DELEGATION_PID_START_HEIGHT: u32 = 1_608_145;
+pub const DELEGATION_PID_START_HEIGHT: u32 = 1_608_145;
 
 pub fn get_user_delegation_txid(last_delegation_txid: &str) -> Result<String, Error> {
     let template = r#"
@@ -149,13 +149,18 @@ pub struct DelegationMappingsPage {
     pub end_cursor: Option<String>,
 }
 
-pub fn get_delegation_mappings(first: Option<String>) -> Result<DelegationMappingsPage, Error> {
+pub fn get_delegation_mappings(
+    first: Option<u32>,
+    after: Option<&str>,
+) -> Result<DelegationMappingsPage, Error> {
+    let first = first.unwrap_or(1).to_string();
     let template = r#"
 query GetDetailedTransactions {
   transactions(
     first: $firstvar
     sort: HEIGHT_DESC
     owners: ["$addressvar"]
+$afterclause
     tags: [
       { name: "Action", values: ["Delegation-Mappings"] }
     ]
@@ -184,9 +189,13 @@ query GetDetailedTransactions {
 }
     "#;
 
+    let after_clause = after
+        .map(|cursor| format!("    after: \"{cursor}\"\n"))
+        .unwrap_or_default();
     let query = template
         .replace("$addressvar", AO_AUTHORITY)
-        .replace("$firstvar", &first.unwrap_or("1".to_string()).to_string());
+        .replace("$firstvar", &first)
+        .replace("$afterclause", &after_clause);
 
     let body = json!({
         "query": query,
@@ -229,7 +238,7 @@ query GetDetailedTransactions {
             .get("block")
             .and_then(|v| v.get("height"))
             .and_then(|v| v.as_u64())
-            .and_then(|n| u32::try_from(n).ok())
+            .map(|v| v as u32)
             .unwrap_or(0);
         out.push(DelegationMappingMeta {
             tx_id: id.to_string(),
@@ -254,7 +263,7 @@ mod tests {
 
     #[test]
     fn get_latest_delegation_mappings_test() {
-        let res = get_delegation_mappings(None).unwrap();
+        let res = get_delegation_mappings(None, None).unwrap();
         println!("{:?}", res);
         assert_eq!(res.has_next_page, true);
     }

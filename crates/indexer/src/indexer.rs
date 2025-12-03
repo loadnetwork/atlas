@@ -1,8 +1,13 @@
 use anyhow::Result;
 use chrono::Utc;
-use common::{gateway::get_ar_balance, gql::OracleStakers, projects::Project};
+use common::{
+    delegation::{get_delegation_mappings, DelegationMappingMeta, DelegationMappingsPage},
+    gateway::get_ar_balance,
+    gql::OracleStakers,
+    projects::Project,
+};
 use flp::{
-    csv_parser::parse_flp_balances_setting_res,
+    csv_parser::{parse_delegation_mappings_res, parse_flp_balances_setting_res},
     types::{DelegationsRes, MAX_FACTOR, SetBalancesData},
     wallet::get_wallet_delegations,
 };
@@ -13,7 +18,8 @@ use std::str::FromStr;
 
 use crate::{
     clickhouse::{
-        Clickhouse, FlpPositionRow, OracleSnapshotRow, WalletBalanceRow, WalletDelegationRow,
+        Clickhouse, DelegationMappingRow, FlpPositionRow, OracleSnapshotRow, WalletBalanceRow,
+        WalletDelegationRow,
     },
     config::Config,
 };
@@ -44,6 +50,7 @@ impl Indexer {
     }
 
     async fn run_once(&self) -> Result<()> {
+        self.index_delegation_mappings().await?;
         for ticker in &self.config.tickers {
             self.index_ticker(ticker).await?;
         }
@@ -151,6 +158,39 @@ impl Indexer {
         );
         Ok(())
     }
+
+    async fn index_delegation_mappings(&self) -> Result<()> {
+        let page = fetch_latest_mapping_page(1).await?;
+        let Some(meta) = page.mappings.into_iter().next() else {
+            return Ok(());
+        };
+        if self
+            .clickhouse
+            .has_delegation_mapping(&meta.tx_id)
+            .await?
+        {
+            return Ok(());
+        }
+        println!(
+            "delegation mapping tx {} height {}",
+            meta.tx_id, meta.height
+        );
+        if let Err(err) = self.store_delegation_mapping(&meta).await {
+            eprintln!("delegation mapping tx {} error {err:?}", meta.tx_id);
+        }
+        Ok(())
+    }
+
+    async fn store_delegation_mapping(
+        &self,
+        meta: &DelegationMappingMeta,
+    ) -> Result<()> {
+        let rows = build_mapping_rows(meta).await?;
+        self.clickhouse
+            .insert_delegation_mappings(&rows)
+            .await?;
+        Ok(())
+    }
 }
 
 fn normalize_amount(amount: &str, ticker: &str) -> Option<Decimal> {
@@ -196,4 +236,33 @@ async fn load_ar_balance(address: String) -> Decimal {
         Ok(Ok(value)) => Decimal::from_f64(value).unwrap_or(Decimal::ZERO),
         _ => Decimal::ZERO,
     }
+}
+
+async fn fetch_latest_mapping_page(limit: u32) -> Result<DelegationMappingsPage> {
+    Ok(tokio::task::spawn_blocking(move || get_delegation_mappings(Some(limit), None))
+        .await??)
+}
+
+async fn build_mapping_rows(
+    meta: &DelegationMappingMeta,
+) -> Result<Vec<DelegationMappingRow>> {
+    let tx_id = meta.tx_id.clone();
+    let height = meta.height;
+    let csv_rows = tokio::task::spawn_blocking({
+        let fetch_id = tx_id.clone();
+        move || parse_delegation_mappings_res(&fetch_id)
+    })
+    .await??;
+    let ts = Utc::now();
+    Ok(csv_rows
+        .into_iter()
+        .map(|row| DelegationMappingRow {
+            ts: ts.clone(),
+            height,
+            tx_id: tx_id.clone(),
+            wallet_from: row.wallet_from,
+            wallet_to: row.wallet_to,
+            factor: row.factor,
+        })
+        .collect())
 }

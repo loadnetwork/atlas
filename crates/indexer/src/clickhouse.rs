@@ -34,6 +34,7 @@ impl Clickhouse {
             "create table if not exists wallet_balances(ts DateTime64(3), ticker String, wallet String, eoa String, amount String, tx_id String) engine=ReplacingMergeTree order by (ticker, wallet, ts)",
             "create table if not exists wallet_delegations(ts DateTime64(3), wallet String, payload String) engine=ReplacingMergeTree order by (wallet, ts)",
             "create table if not exists flp_positions(ts DateTime64(3), ticker String, wallet String, eoa String, project String, factor UInt32, amount String) engine=ReplacingMergeTree order by (project, wallet, ts)",
+            "create table if not exists delegation_mappings(ts DateTime64(3), height UInt32, tx_id String, wallet_from String, wallet_to String, factor UInt32) engine=ReplacingMergeTree order by (height, tx_id, wallet_from, wallet_to)",
         ];
         for stmt in stmts {
             self.client.query(stmt).execute().await?;
@@ -44,6 +45,7 @@ impl Clickhouse {
             "alter table flp_positions add column if not exists eoa String after wallet",
             "alter table flp_positions add column if not exists ar_amount String after amount",
             "alter table flp_positions modify column project String",
+            "alter table delegation_mappings add column if not exists ts DateTime64(3) default now()",
         ];
         for stmt in alters {
             self.client.query(stmt).execute().await?;
@@ -66,6 +68,9 @@ impl Clickhouse {
     pub async fn insert_positions(&self, rows: &[FlpPositionRow]) -> Result<()> {
         self.insert_rows("flp_positions", rows).await
     }
+    pub async fn insert_delegation_mappings(&self, rows: &[DelegationMappingRow]) -> Result<()> {
+        self.insert_rows("delegation_mappings", rows).await
+    }
 
     pub async fn has_oracle(&self, ticker: &str, tx_id: &str) -> Result<bool> {
         let query = format!(
@@ -78,6 +83,12 @@ impl Clickhouse {
             .bind(tx_id)
             .fetch_one::<CountRow>()
             .await?;
+        Ok(row.cnt > 0)
+    }
+
+    pub async fn has_delegation_mapping(&self, tx_id: &str) -> Result<bool> {
+        let query = "select count() as cnt from delegation_mappings where tx_id = ? limit 1";
+        let row = self.client.query(query).bind(tx_id).fetch_one::<CountRow>().await?;
         Ok(row.cnt > 0)
     }
 
@@ -136,6 +147,17 @@ pub struct FlpPositionRow {
     pub factor: u32,
     pub amount: String,
     pub ar_amount: String,
+}
+
+#[derive(Clone, Debug, Row, Serialize)]
+pub struct DelegationMappingRow {
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    pub ts: DateTime<Utc>,
+    pub height: u32,
+    pub tx_id: String,
+    pub wallet_from: String,
+    pub wallet_to: String,
+    pub factor: u32,
 }
 #[derive(Debug, Row, Serialize, serde::Deserialize)]
 struct CountRow {
