@@ -63,7 +63,9 @@ pub fn get_flp_own_minting_report(flp_id: &str) -> Result<String, Error> {
         .and_then(|v| v.get("node"))
         .and_then(|v| v.get("id"))
         .and_then(|v| v.as_str())
-        .ok_or(anyhow!("error: error accessing flp's last minting cycle report msg id"))?;
+        .ok_or(anyhow!(
+            "error: error accessing flp's last minting cycle report msg id"
+        ))?;
 
     Ok(id.to_string())
 }
