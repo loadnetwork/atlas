@@ -192,6 +192,38 @@ impl AtlasIndexerClient {
             })
             .collect())
     }
+
+    pub async fn multi_project_delegators(
+        &self,
+        limit: u64,
+    ) -> Result<Vec<MultiDelegator>, Error> {
+        let rows = self
+            .client
+            .query(
+                "select wallet, any(eoa) as eoa, countDistinct(project) as project_count, \
+                 groupUniqArray(project) as projects \
+                 from flp_positions \
+                 group by wallet \
+                 having project_count >= 2 \
+                 order by project_count desc \
+                 limit ?",
+            )
+            .bind(limit)
+            .fetch_all::<MultiDelegatorRow>()
+            .await?;
+        if rows.is_empty() {
+            return Err(anyhow!("no multi project delegators found"));
+        }
+        Ok(rows
+            .into_iter()
+            .map(|row| MultiDelegator {
+                wallet: row.wallet,
+                eoa: row.eoa,
+                project_count: row.project_count,
+                projects: row.projects,
+            })
+            .collect())
+    }
 }
 
 async fn ensure_schema(
@@ -354,4 +386,20 @@ struct DelegationHeightRow {
 pub struct DelegationHeight {
     pub height: u32,
     pub tx_id: String,
+}
+
+#[derive(Row, serde::Deserialize)]
+struct MultiDelegatorRow {
+    wallet: String,
+    eoa: String,
+    project_count: u64,
+    projects: Vec<String>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct MultiDelegator {
+    pub wallet: String,
+    pub eoa: String,
+    pub project_count: u64,
+    pub projects: Vec<String>,
 }

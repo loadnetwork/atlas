@@ -1,6 +1,6 @@
 use crate::{
     errors::ServerError,
-    indexer::{AtlasIndexerClient, DelegationHeight, DelegationMappingHistory},
+    indexer::{AtlasIndexerClient, DelegationHeight, DelegationMappingHistory, MultiDelegator},
 };
 use axum::{Json, extract::{Path, Query}};
 use common::gql::OracleStakers;
@@ -86,5 +86,18 @@ pub async fn get_delegation_mapping_heights(
         .unwrap_or(25);
     let client = AtlasIndexerClient::new().await?;
     let rows: Vec<DelegationHeight> = client.latest_delegation_heights(limit).await?;
+    Ok(Json(serde_json::to_value(&rows)?))
+}
+
+pub async fn get_multi_project_delegators(
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, ServerError> {
+    let limit = params
+        .get("limit")
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(100);
+    let client = AtlasIndexerClient::new().await?;
+    let rows: Vec<MultiDelegator> = client.multi_project_delegators(limit).await?;
     Ok(Json(serde_json::to_value(&rows)?))
 }

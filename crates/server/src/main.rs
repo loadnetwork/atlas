@@ -1,7 +1,8 @@
 use crate::routes::{
-    get_ar_wallet_identity, get_eoa_wallet_identity, get_flp_snapshot_handler,
-    get_oracle_data_handler, get_oracle_feed, get_wallet_delegation_mappings_history,
-    get_wallet_delegations_handler, get_delegation_mapping_heights, handle_route,
+    get_ar_wallet_identity, get_delegation_mapping_heights, get_eoa_wallet_identity,
+    get_flp_snapshot_handler, get_multi_project_delegators, get_oracle_data_handler,
+    get_oracle_feed, get_wallet_delegation_mappings_history, get_wallet_delegations_handler,
+    handle_route,
 };
 use axum::{Router, extract::DefaultBodyLimit, routing::get};
 use common::env::get_env_var;
@@ -39,6 +40,10 @@ async fn main() {
         .route(
             "/delegation-mappings/heights",
             get(get_delegation_mapping_heights),
+        )
+        .route(
+            "/flp/delegators/multi",
+            get(get_multi_project_delegators),
         )
         .route("/oracle/{ticker}", get(get_oracle_data_handler))
         .route("/oracle/feed/{ticker}", get(get_oracle_feed))
