@@ -2,7 +2,10 @@ use crate::{
     errors::ServerError,
     indexer::{AtlasIndexerClient, DelegationHeight, DelegationMappingHistory, MultiDelegator},
 };
-use axum::{Json, extract::{Path, Query}};
+use axum::{
+    Json,
+    extract::{Path, Query},
+};
 use common::{gql::OracleStakers, minting::get_flp_own_minting_report};
 use flp::csv_parser::parse_flp_balances_setting_res;
 use flp::json_parser::parse_own_minting_report;
@@ -103,7 +106,9 @@ pub async fn get_multi_project_delegators(
     Ok(Json(serde_json::to_value(&rows)?))
 }
 
-pub async fn get_flp_own_minting_report_handler(Path(project): Path<String>) -> Result<Json<Value>, ServerError> {
+pub async fn get_flp_own_minting_report_handler(
+    Path(project): Path<String>,
+) -> Result<Json<Value>, ServerError> {
     let report_id: String = get_flp_own_minting_report(&project)?;
     let report = parse_own_minting_report(&report_id)?;
     Ok(Json(serde_json::to_value(&report)?))

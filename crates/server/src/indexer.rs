@@ -193,10 +193,7 @@ impl AtlasIndexerClient {
             .collect())
     }
 
-    pub async fn multi_project_delegators(
-        &self,
-        limit: u64,
-    ) -> Result<Vec<MultiDelegator>, Error> {
+    pub async fn multi_project_delegators(&self, limit: u64) -> Result<Vec<MultiDelegator>, Error> {
         let rows = self
             .client
             .query(
