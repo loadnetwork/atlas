@@ -36,6 +36,17 @@ pub struct SetBalancesData {
     pub ar_address: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct OwnMintingReport {
+    pub distribution_tick: u32,
+    pub total_minted: String,
+    pub total_inflow: String,
+    pub timestamp: u64,
+    pub ao_kept: String,
+    pub ao_exchanged_for_pi: String,
+}
+
 impl DelegationsRes {
     pub fn pi_default(address: &str) -> Self {
         let preference = WalletDelegations {
