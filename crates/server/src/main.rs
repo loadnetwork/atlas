@@ -2,7 +2,7 @@ use crate::routes::{
     get_ar_wallet_identity, get_delegation_mapping_heights, get_eoa_wallet_identity,
     get_flp_snapshot_handler, get_multi_project_delegators, get_oracle_data_handler,
     get_oracle_feed, get_wallet_delegation_mappings_history, get_wallet_delegations_handler,
-    handle_route,
+    handle_route, get_flp_own_minting_report_handler
 };
 use axum::{Router, extract::DefaultBodyLimit, routing::get};
 use common::env::get_env_var;
@@ -49,6 +49,7 @@ async fn main() {
         .route("/oracle/feed/{ticker}", get(get_oracle_feed))
         // returns the direct delegation data per FLP ID: LSTs + AR -- factored data
         .route("/flp/delegators/{project}", get(get_flp_snapshot_handler))
+        .route("/flp/minting/{project}", get(get_flp_own_minting_report_handler))
         .layer(DefaultBodyLimit::max(REQ_SIZE_LIMIT))
         .layer(RequestBodyLimitLayer::new(REQ_SIZE_LIMIT))
         .layer(cors);

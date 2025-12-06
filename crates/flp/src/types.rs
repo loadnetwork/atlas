@@ -45,6 +45,7 @@ pub struct OwnMintingReport {
     pub timestamp: u64,
     pub ao_kept: String,
     pub ao_exchanged_for_pi: String,
+    pub report_id: Option<String>
 }
 
 impl DelegationsRes {
