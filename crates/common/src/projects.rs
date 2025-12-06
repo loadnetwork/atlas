@@ -115,4 +115,25 @@ impl Project {
                 | INF_PID
         )
     }
+
+    pub fn get_all(&self) -> Vec<Project> {
+        vec![
+            Project::pi(),
+            Project::apus(),
+            Project::load(),
+            Project::botega(),
+            Project::aos(),
+            Project::wndr(),
+            Project::action(),
+            Project::space(),
+            Project::lqd(),
+            Project::game(),
+            Project::nau(),
+            Project::rella(),
+            Project::ario(),
+            Project::pixl(),
+            Project::vela(),
+            Project::inf(),
+        ]
+    }
 }
