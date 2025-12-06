@@ -6,7 +6,7 @@ use axum::{
     Json,
     extract::{Path, Query},
 };
-use common::{gql::OracleStakers, minting::get_flp_own_minting_report};
+use common::{gql::OracleStakers, minting::get_flp_own_minting_report, projects::Project};
 use flp::csv_parser::parse_flp_balances_setting_res;
 use flp::json_parser::parse_own_minting_report;
 use flp::wallet::get_wallet_delegations;
@@ -112,4 +112,9 @@ pub async fn get_flp_own_minting_report_handler(
     let report_id: String = get_flp_own_minting_report(&project)?;
     let report = parse_own_minting_report(&report_id)?;
     Ok(Json(serde_json::to_value(&report)?))
+}
+
+pub async fn get_all_projects_metadata_handler() -> Result<Json<Value>, ServerError> {
+    let projects = Project::get_all();
+    Ok(Json(serde_json::to_value(&projects)?))
 }

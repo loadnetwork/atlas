@@ -19,6 +19,7 @@ Base endpoint: https://api.load.network/atlas/
 - `GET /flp/delegators/{pid}` – merged snapshot of all tickers (LSTs + AR) delegating to a given FLP, including wallet/EVM mapping, factors, token amounts, and AR amounts.
 - `GET /flp/delegators/multi?limit=100` - returns a list of delegators that delegate to at least 2 distinct FLPs.
 - `GET /flp/minting/{project}` - returns the latest FLP's cycle `Own-Minting-Report` data
+- `GET /flp/metadata/all` - return a vector of the tracked FLPs and their metadata
 
 ## Using the workspace crates in Rust
 

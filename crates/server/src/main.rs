@@ -1,8 +1,8 @@
 use crate::routes::{
-    get_ar_wallet_identity, get_delegation_mapping_heights, get_eoa_wallet_identity,
-    get_flp_own_minting_report_handler, get_flp_snapshot_handler, get_multi_project_delegators,
-    get_oracle_data_handler, get_oracle_feed, get_wallet_delegation_mappings_history,
-    get_wallet_delegations_handler, handle_route,
+    get_all_projects_metadata_handler, get_ar_wallet_identity, get_delegation_mapping_heights,
+    get_eoa_wallet_identity, get_flp_own_minting_report_handler, get_flp_snapshot_handler,
+    get_multi_project_delegators, get_oracle_data_handler, get_oracle_feed,
+    get_wallet_delegation_mappings_history, get_wallet_delegations_handler, handle_route,
 };
 use axum::{Router, extract::DefaultBodyLimit, routing::get};
 use common::env::get_env_var;
@@ -50,6 +50,7 @@ async fn main() {
             "/flp/minting/{project}",
             get(get_flp_own_minting_report_handler),
         )
+        .route("/flp/metadata/all", get(get_all_projects_metadata_handler))
         .layer(DefaultBodyLimit::max(REQ_SIZE_LIMIT))
         .layer(RequestBodyLimitLayer::new(REQ_SIZE_LIMIT))
         .layer(cors);

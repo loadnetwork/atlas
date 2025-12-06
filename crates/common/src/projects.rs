@@ -116,7 +116,7 @@ impl Project {
         )
     }
 
-    pub fn get_all(&self) -> Vec<Project> {
+    pub fn get_all() -> Vec<Project> {
         vec![
             Project::pi(),
             Project::apus(),
