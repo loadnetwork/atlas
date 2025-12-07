@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 // FLPs PIDs
-// here this PI_PID is set internally as same as token pid to refer 
+// here this PI_PID is set internally as same as token pid to refer
 // as defautl value for wallet with no Set-Delegation
 pub const INTERNAL_PI_PID: &str = "4hXj_E-5fAKmo4E8KjgQvuDJKAFk9P2grhycVmISDLs";
 pub const PI_PID: &str = "H1I09hGlSlqrvlQid4zBp-lleynE8bNo2Ep1u8xq0fQ";
@@ -63,7 +63,14 @@ macro_rules! project {
 }
 
 impl Project {
-    project!(pi_internal, "Permaweb Index", "PI", INTERNAL_PI_PID, PI_TOKEN, 12u32);
+    project!(
+        pi_internal,
+        "Permaweb Index",
+        "PI",
+        INTERNAL_PI_PID,
+        PI_TOKEN,
+        12u32
+    );
     project!(pi, "Permaweb Index", "PI", PI_PID, PI_TOKEN, 12u32);
     project!(load, "Load Network", "LOAD", LOAD_PID, LOAD_TOKEN, 18u32);
     project!(apus, "Apus Network", "APUS", APUS_PID, APUS_TOKEN, 12u32);
@@ -102,7 +109,7 @@ impl Project {
         matches!(
             pid,
             INTERNAL_PI_PID
-            | PI_PID
+                | PI_PID
                 | LOAD_PID
                 | APUS_PID
                 | BOTG_PID
