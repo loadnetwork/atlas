@@ -1,6 +1,9 @@
 use crate::{
     errors::ServerError,
-    indexer::{AtlasIndexerClient, DelegationHeight, DelegationMappingHistory, MultiDelegator},
+    indexer::{
+        AtlasIndexerClient, DelegationHeight, DelegationMappingHistory, MultiDelegator,
+        ProjectCycleTotal,
+    },
 };
 use axum::{
     Json,
@@ -103,6 +106,24 @@ pub async fn get_multi_project_delegators(
         .unwrap_or(100);
     let client = AtlasIndexerClient::new().await?;
     let rows: Vec<MultiDelegator> = client.multi_project_delegators(limit).await?;
+    Ok(Json(serde_json::to_value(&rows)?))
+}
+
+pub async fn get_project_cycle_totals(
+    Path(project): Path<String>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, ServerError> {
+    let limit = params
+        .get("limit")
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(25);
+    let ticker = params.get("ticker").cloned();
+    let client = AtlasIndexerClient::new().await?;
+    let rows: Vec<ProjectCycleTotal> =
+        client
+            .project_cycle_totals(&project, ticker.as_deref(), limit)
+            .await?;
     Ok(Json(serde_json::to_value(&rows)?))
 }
 

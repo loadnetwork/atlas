@@ -221,6 +221,45 @@ impl AtlasIndexerClient {
             })
             .collect())
     }
+
+    pub async fn project_cycle_totals(
+        &self,
+        project: &str,
+        ticker: Option<&str>,
+        limit: u64,
+    ) -> Result<Vec<ProjectCycleTotal>, Error> {
+        let ticker_clause = if ticker.is_some() {
+            " and p.ticker = ?"
+        } else {
+            ""
+        };
+        let query_str = format!(
+            "select o.tx_id, p.ts, \
+             sumIf(toFloat64(p.amount), p.ticker = 'usds') as usds_total, \
+             sumIf(toFloat64(p.amount), p.ticker = 'dai') as dai_total, \
+             sumIf(toFloat64(p.amount), p.ticker = 'steth') as steth_total \
+             from flp_positions p \
+             inner join oracle_snapshots o on o.ticker = p.ticker and o.ts = p.ts \
+             where p.project = ?{} \
+             group by o.tx_id, p.ts \
+             order by p.ts desc \
+             limit ?",
+            ticker_clause
+        );
+        let mut query = self.client.query(&query_str);
+        query = query.bind(project);
+        if let Some(t) = ticker {
+            query = query.bind(t);
+        }
+        let rows = query
+            .bind(limit)
+            .fetch_all::<ProjectCycleTotal>()
+            .await?;
+        if rows.is_empty() {
+            return Err(anyhow!("no cycle totals found for project {project}"));
+        }
+        Ok(rows)
+    }
 }
 
 async fn ensure_schema(
@@ -399,4 +438,14 @@ pub struct MultiDelegator {
     pub eoa: String,
     pub project_count: u64,
     pub projects: Vec<String>,
+}
+
+#[derive(Row, serde::Deserialize, Serialize, Clone)]
+pub struct ProjectCycleTotal {
+    pub tx_id: String,
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    pub ts: DateTime<Utc>,
+    pub usds_total: f64,
+    pub dai_total: f64,
+    pub steth_total: f64,
 }
