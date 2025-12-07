@@ -1,4 +1,4 @@
-use common::projects::PI_PID;
+use common::projects::INTERNAL_PI_PID;
 use serde::{Deserialize, Serialize};
 
 pub const MAX_FACTOR: u32 = 10000;
@@ -51,7 +51,7 @@ pub struct OwnMintingReport {
 impl DelegationsRes {
     pub fn pi_default(address: &str) -> Self {
         let preference = WalletDelegations {
-            wallet_to: PI_PID.to_string(),
+            wallet_to: INTERNAL_PI_PID.to_string(),
             factor: MAX_FACTOR,
         };
         DelegationsRes {

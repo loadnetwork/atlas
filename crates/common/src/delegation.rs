@@ -1,5 +1,5 @@
 use crate::constants::{AO_AUTHORITY, ARWEAVE_GATEWAY, DELEGATION_PID};
-use crate::projects::PI_PID;
+use crate::projects::INTERNAL_PI_PID;
 use anyhow::{Error, anyhow};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -130,7 +130,7 @@ pub fn get_user_last_delegation_txid(address: &str) -> Result<String, Error> {
         // default to the PI address as if a wallet has no Set-Delegation message record
         // the FLP bridge system default for 100% of delegation preference to $PI
         .ok_or(anyhow!("error: error accessing last delegation msg id"))
-        .unwrap_or(PI_PID);
+        .unwrap_or(INTERNAL_PI_PID);
 
     Ok(id.to_string())
 }

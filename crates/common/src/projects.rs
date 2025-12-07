@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 
 // FLPs PIDs
-pub const PI_PID: &str = "4hXj_E-5fAKmo4E8KjgQvuDJKAFk9P2grhycVmISDLs";
+// here this PI_PID is set internally as same as token pid to refer 
+// as defautl value for wallet with no Set-Delegation
+pub const INTERNAL_PI_PID: &str = "4hXj_E-5fAKmo4E8KjgQvuDJKAFk9P2grhycVmISDLs";
+pub const PI_PID: &str = "H1I09hGlSlqrvlQid4zBp-lleynE8bNo2Ep1u8xq0fQ";
 pub const APUS_PID: &str = "jHZBsy0SalZ6I5BmYKRUt0AtLsn-FCFhqf_n6AgwGlc";
 pub const LOAD_PID: &str = "Qz3n2P-EiWNoWsvk7gKLtrV9ChvSXQ5HJPgPklWEgQ0";
 pub const BOTG_PID: &str = "UcBPqkaVI7W4I_YMznrt2JUoyc_7TScCdZWOOSBvMSU";
@@ -60,6 +63,7 @@ macro_rules! project {
 }
 
 impl Project {
+    project!(pi_internal, "Permaweb Index", "PI", INTERNAL_PI_PID, PI_TOKEN, 12u32);
     project!(pi, "Permaweb Index", "PI", PI_PID, PI_TOKEN, 12u32);
     project!(load, "Load Network", "LOAD", LOAD_PID, LOAD_TOKEN, 18u32);
     project!(apus, "Apus Network", "APUS", APUS_PID, APUS_TOKEN, 12u32);
@@ -97,7 +101,8 @@ impl Project {
     pub fn is_flp_project(pid: &str) -> bool {
         matches!(
             pid,
-            PI_PID
+            INTERNAL_PI_PID
+            | PI_PID
                 | LOAD_PID
                 | APUS_PID
                 | BOTG_PID
@@ -118,6 +123,7 @@ impl Project {
 
     pub fn get_all() -> Vec<Project> {
         vec![
+            Project::pi_internal(),
             Project::pi(),
             Project::apus(),
             Project::load(),
