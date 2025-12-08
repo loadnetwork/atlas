@@ -108,10 +108,6 @@ impl Indexer {
             };
             let amount_str = amount_dec.to_string();
             let ar_balance_str = ar_balance.to_string();
-            // println!(
-            //     "wallet {} eoa {} ticker {} balance {} ar {}",
-            //     entry.ar_address, entry.eoa, ticker_owned, amount_str, ar_balance_str
-            // );
             balance_rows.push(WalletBalanceRow {
                 ts: now,
                 ticker: ticker_owned.clone(),
@@ -135,16 +131,6 @@ impl Indexer {
                     if delegated.is_zero() && delegated_ar.is_zero() {
                         continue;
                     }
-                    // println!(
-                    //     "wallet {} eoa {} ticker {} project {} factor {} delegated {} ar {}",
-                    //     entry.ar_address,
-                    //     entry.eoa,
-                    //     ticker_owned,
-                    //     pref.wallet_to,
-                    //     pref.factor,
-                    //     delegated,
-                    //     delegated_ar
-                    // );
                     position_rows.push(FlpPositionRow {
                         ts: now,
                         ticker: ticker_owned.clone(),
