@@ -73,10 +73,10 @@ impl Indexer {
         let now = Utc::now();
         let ticker_owned = ticker.to_string();
         let (tx_id, balances) = load_balances(ticker_owned.clone()).await?;
-        // if self.clickhouse.has_oracle(&ticker_owned, &tx_id).await? {
-        //     println!("ticker {ticker}: tx {tx_id} already processed, skipping");
-        //     return Ok(());
-        // }
+        if self.clickhouse.has_oracle(&ticker_owned, &tx_id).await? {
+            println!("ticker {ticker}: tx {tx_id} already processed, skipping");
+            return Ok(());
+        }
         println!("ticker {ticker}: loading balances");
         println!("ticker {ticker}: balances {}", balances.len());
         self.clickhouse
