@@ -108,7 +108,7 @@ impl AtlasIndexerClient {
         let rows = self
             .client
             .query(
-                "select o.ts, o.ticker, o.tx_id, sum(toFloat64(p.amount)) as total, uniqExact(p.wallet) as delegators \
+                "select o.ts, o.ticker, o.tx_id, toFloat64(sum(toDecimal128OrZero(p.amount, 18))) as total, uniqExact(p.wallet) as delegators \
                  from oracle_snapshots o \
                  left join flp_positions p \
                    on p.ticker = o.ticker and p.ts = o.ts \
