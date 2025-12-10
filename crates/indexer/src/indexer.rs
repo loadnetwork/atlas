@@ -37,7 +37,7 @@ impl Indexer {
 
     pub async fn run(&self) -> Result<()> {
         self.clickhouse.ensure().await?;
-        self.spawn_backfill();
+        // self.spawn_backfill();
         println!("indexer ready with tickers {:?}", self.config.tickers);
         self.run_once().await?;
         let mut interval = tokio::time::interval(self.config.interval);
