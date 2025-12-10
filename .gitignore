@@ -1,3 +1,4 @@
 /target
 .env
 debug.txt
+/crates/server/src/bin*

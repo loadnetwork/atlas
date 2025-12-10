@@ -108,15 +108,16 @@ impl AtlasIndexerClient {
         let rows = self
             .client
             .query(
-                "select o.ts, o.ticker, o.tx_id, toFloat64(sum(toDecimal128OrZero(p.amount, 18))) as total, uniqExact(p.wallet) as delegators \
+                "select o.ts, o.ticker, o.tx_id, toFloat64(sum(toDecimal128(if(length(p.amount) = 0, '0', p.amount), 18))) as total, uniqExact(p.wallet) as delegators \
                  from oracle_snapshots o \
                  left join flp_positions p \
                    on p.ticker = o.ticker and p.ts = o.ts \
                  where o.ticker = ? \
                  group by o.ts, o.ticker, o.tx_id \
+                 having total > 0 \
                  order by o.ts desc \
                  limit ?",
-            )
+           )
             .bind(ticker)
             .bind(limit)
             .fetch_all::<OracleSnapshot>()
