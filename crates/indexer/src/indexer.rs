@@ -77,9 +77,7 @@ impl Indexer {
                     None => return Ok(()),
                 };
                 let rows = [row];
-                handle.block_on(async {
-                    clickhouse.insert_explorer_stats(&rows).await
-                })
+                handle.block_on(async { clickhouse.insert_explorer_stats(&rows).await })
             }) {
                 eprintln!("atlas explorer indexer error: {err:?}");
             }

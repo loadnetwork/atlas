@@ -277,11 +277,7 @@ impl AtlasIndexerClient {
     }
 
     pub async fn daily_explorer_stats(&self, day: NaiveDate) -> Result<ExplorerDayStats, Error> {
-        let start = day
-            .and_hms_opt(0, 0, 0)
-            .unwrap()
-            .and_utc()
-            .timestamp();
+        let start = day.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp();
         let end = day
             .succ_opt()
             .unwrap_or(day)

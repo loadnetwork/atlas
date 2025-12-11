@@ -203,7 +203,8 @@ pub struct AtlasExplorerRow {
 
 impl AtlasExplorerRow {
     pub fn from_block_stats(stats: &BlockStats) -> Option<Self> {
-        let ts = DateTime::<Utc>::from_timestamp_millis((stats.timestamp as i64).saturating_mul(1000))?;
+        let ts =
+            DateTime::<Utc>::from_timestamp_millis((stats.timestamp as i64).saturating_mul(1000))?;
         Some(Self {
             ts,
             height: stats.height,
