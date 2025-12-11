@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "crates/common", "crates/flp", "crates/indexer", "crates/server",
+    "crates/common", "crates/explorer", "crates/flp", "crates/indexer", "crates/server",
 ]
 
 resolver = "2"
