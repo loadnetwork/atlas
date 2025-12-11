@@ -1,6 +1,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use clickhouse::{Client, Row};
+use explorer::BlockStats;
 use serde::Serialize;
 
 use crate::config::Config;
@@ -35,6 +36,7 @@ impl Clickhouse {
             "create table if not exists wallet_delegations(ts DateTime64(3), wallet String, payload String) engine=ReplacingMergeTree order by (wallet, ts)",
             "create table if not exists flp_positions(ts DateTime64(3), ticker String, wallet String, eoa String, project String, factor UInt32, amount String) engine=ReplacingMergeTree order by (project, wallet, ts)",
             "create table if not exists delegation_mappings(ts DateTime64(3), height UInt32, tx_id String, wallet_from String, wallet_to String, factor UInt32) engine=ReplacingMergeTree order by (height, tx_id, wallet_from, wallet_to)",
+            "create table if not exists atlas_explorer(ts DateTime64(3), height UInt64, tx_count UInt64, eval_count UInt64, transfer_count UInt64, new_process_count UInt64, new_module_count UInt64, active_users UInt64, active_processes UInt64, tx_count_rolling UInt64, processes_rolling UInt64, modules_rolling UInt64) engine=ReplacingMergeTree order by height",
         ];
         for stmt in stmts {
             self.client.query(stmt).execute().await?;
@@ -71,6 +73,9 @@ impl Clickhouse {
     pub async fn insert_delegation_mappings(&self, rows: &[DelegationMappingRow]) -> Result<()> {
         self.insert_rows("delegation_mappings", rows).await
     }
+    pub async fn insert_explorer_stats(&self, rows: &[AtlasExplorerRow]) -> Result<()> {
+        self.insert_rows("atlas_explorer", rows).await
+    }
 
     pub async fn has_oracle(&self, ticker: &str, tx_id: &str) -> Result<bool> {
         let query = format!(
@@ -95,6 +100,20 @@ impl Clickhouse {
             .fetch_one::<CountRow>()
             .await?;
         Ok(row.cnt > 0)
+    }
+
+    pub async fn latest_explorer_stats(&self) -> Result<Option<BlockStats>> {
+        let rows = self
+            .client
+            .query(
+                "select ts, height, tx_count, eval_count, transfer_count, new_process_count, new_module_count, active_users, active_processes, tx_count_rolling, processes_rolling, modules_rolling \
+                 from atlas_explorer \
+                 order by height desc \
+                 limit 1",
+            )
+            .fetch_all::<ExplorerSelectRow>()
+            .await?;
+        Ok(rows.into_iter().next().map(|row| row.into()))
     }
 
     async fn insert_rows<T>(&self, table: &str, rows: &[T]) -> Result<()>
@@ -163,6 +182,79 @@ pub struct DelegationMappingRow {
     pub wallet_from: String,
     pub wallet_to: String,
     pub factor: u32,
+}
+
+#[derive(Clone, Debug, Row, Serialize)]
+pub struct AtlasExplorerRow {
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    pub ts: DateTime<Utc>,
+    pub height: u64,
+    pub tx_count: u64,
+    pub eval_count: u64,
+    pub transfer_count: u64,
+    pub new_process_count: u64,
+    pub new_module_count: u64,
+    pub active_users: u64,
+    pub active_processes: u64,
+    pub tx_count_rolling: u64,
+    pub processes_rolling: u64,
+    pub modules_rolling: u64,
+}
+
+impl AtlasExplorerRow {
+    pub fn from_block_stats(stats: &BlockStats) -> Option<Self> {
+        let ts = DateTime::<Utc>::from_timestamp_millis((stats.timestamp as i64).saturating_mul(1000))?;
+        Some(Self {
+            ts,
+            height: stats.height,
+            tx_count: stats.tx_count,
+            eval_count: stats.eval_count,
+            transfer_count: stats.transfer_count,
+            new_process_count: stats.new_process_count,
+            new_module_count: stats.new_module_count,
+            active_users: stats.active_users,
+            active_processes: stats.active_processes,
+            tx_count_rolling: stats.tx_count_rolling,
+            processes_rolling: stats.processes_rolling,
+            modules_rolling: stats.modules_rolling,
+        })
+    }
+}
+
+#[derive(Debug, Row, Serialize, serde::Deserialize)]
+struct ExplorerSelectRow {
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    ts: DateTime<Utc>,
+    height: u64,
+    tx_count: u64,
+    eval_count: u64,
+    transfer_count: u64,
+    new_process_count: u64,
+    new_module_count: u64,
+    active_users: u64,
+    active_processes: u64,
+    tx_count_rolling: u64,
+    processes_rolling: u64,
+    modules_rolling: u64,
+}
+
+impl From<ExplorerSelectRow> for BlockStats {
+    fn from(row: ExplorerSelectRow) -> Self {
+        BlockStats {
+            height: row.height,
+            timestamp: (row.ts.timestamp_millis() / 1000) as u64,
+            tx_count: row.tx_count,
+            eval_count: row.eval_count,
+            transfer_count: row.transfer_count,
+            new_process_count: row.new_process_count,
+            new_module_count: row.new_module_count,
+            active_users: row.active_users,
+            active_processes: row.active_processes,
+            tx_count_rolling: row.tx_count_rolling,
+            processes_rolling: row.processes_rolling,
+            modules_rolling: row.modules_rolling,
+        }
+    }
 }
 #[derive(Debug, Row, Serialize, serde::Deserialize)]
 struct CountRow {

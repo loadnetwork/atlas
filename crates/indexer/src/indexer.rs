@@ -15,15 +15,17 @@ use futures::{StreamExt, stream};
 use rust_decimal::{Decimal, prelude::FromPrimitive};
 use serde_json::to_string;
 use std::str::FromStr;
+use tokio::runtime::Handle;
 
 use crate::{
     backfill,
     clickhouse::{
-        Clickhouse, DelegationMappingRow, FlpPositionRow, OracleSnapshotRow, WalletBalanceRow,
-        WalletDelegationRow,
+        AtlasExplorerRow, Clickhouse, DelegationMappingRow, FlpPositionRow, OracleSnapshotRow,
+        WalletBalanceRow, WalletDelegationRow,
     },
     config::Config,
 };
+use explorer;
 
 pub struct Indexer {
     config: Config,
@@ -37,6 +39,7 @@ impl Indexer {
 
     pub async fn run(&self) -> Result<()> {
         self.clickhouse.ensure().await?;
+        self.spawn_explorer_bridge().await?;
         // self.spawn_backfill();
         println!("indexer ready with tickers {:?}", self.config.tickers);
         self.run_once().await?;
@@ -56,6 +59,31 @@ impl Indexer {
         for ticker in &self.config.tickers {
             self.index_ticker(ticker).await?;
         }
+        Ok(())
+    }
+
+    async fn spawn_explorer_bridge(&self) -> Result<()> {
+        let start = self
+            .clickhouse
+            .latest_explorer_stats()
+            .await?
+            .unwrap_or_else(|| explorer::update_stats_gap::LATEST_AGG_STATS_SET.clone());
+        let clickhouse = self.clickhouse.clone();
+        let handle = Handle::current();
+        std::thread::spawn(move || {
+            if let Err(err) = explorer::run_stats_indexer_from(start, |stats| {
+                let row = match AtlasExplorerRow::from_block_stats(stats) {
+                    Some(row) => row,
+                    None => return Ok(()),
+                };
+                let rows = [row];
+                handle.block_on(async {
+                    clickhouse.insert_explorer_stats(&rows).await
+                })
+            }) {
+                eprintln!("atlas explorer indexer error: {err:?}");
+            }
+        });
         Ok(())
     }
 
