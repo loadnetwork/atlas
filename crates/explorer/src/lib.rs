@@ -2,6 +2,7 @@ use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::{BTreeMap, HashSet};
+pub mod update_stats_gap;
 
 const ENDPOINT: &str = "https://permagate.io/graphql";
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -24,6 +25,7 @@ pub struct AoPage {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BlockStats {
+    pub height: u64,
     pub timestamp: u64,
     pub tx_count: u64,
     pub eval_count: u64,
@@ -128,7 +130,7 @@ pub fn aggregate_block(txs: &[AoTx]) -> Vec<BlockStats> {
     let mut tx_roll = 0;
     let mut proc_roll = 0;
     let mut mod_roll = 0;
-    for (_height, block) in grouped {
+    for (height, block) in grouped {
         let ts = block
             .get(0)
             .and_then(|t| Some(t.block_timestamp.to_string()))
@@ -162,6 +164,7 @@ pub fn aggregate_block(txs: &[AoTx]) -> Vec<BlockStats> {
         proc_roll += new_process_count;
         mod_roll += new_module_count;
         out.push(BlockStats {
+            height: height,
             timestamp: ts.unwrap_or(0),
             tx_count,
             eval_count,
