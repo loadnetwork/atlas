@@ -5,7 +5,7 @@ A monitoring and indexing system for the [Fairlaunch Bridge](https://ao.arweave.
 
 ## Using the HTTP API
 
-Base endpoint: https://api.load.network/atlas/ 
+Base endpoint: https://atlas-server.decent.land
 
 #### Example requests:
 
