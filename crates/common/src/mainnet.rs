@@ -51,6 +51,8 @@ pub struct MainnetBlockMessagesMeta {
     pub recipient: String,
     pub block_height: u32,
     pub block_timestamp: u64,
+    pub bundled_in: String,
+    pub data_size: String,
     pub tags: Vec<Tag>,
 }
 
@@ -88,9 +90,15 @@ query aoMainnet {
                 owner {
                     address
                 }
+                bundledIn {
+                    id
+                }
                 block {
                     height
                     timestamp
+                }
+                data {
+                    size
                 }
             }
         }
@@ -188,6 +196,20 @@ query aoMainnet {
             .unwrap_or_default()
             .to_string();
 
+        let data_size = node
+            .get("data")
+            .and_then(|v| v.get("size"))
+            .and_then(|s| s.as_str())
+            .unwrap_or_default()
+            .to_string();
+
+        let bundled_in: String = node
+            .get("bundledIn")
+            .and_then(|v| v.get("id"))
+            .and_then(|s| s.as_str())
+            .unwrap_or_default()
+            .to_string();
+
         out.push(MainnetBlockMessagesMeta {
             msg_id: id.to_string(),
             block_height,
@@ -195,6 +217,8 @@ query aoMainnet {
             owner,
             recipient,
             tags,
+            data_size,
+            bundled_in,
         });
     }
 
@@ -248,8 +272,7 @@ mod tests {
 
     #[test]
     fn recipient_test() {
-        let messages =
-            scan_arweave_block_for_msgs(DataProtocol::B, 1630347, None).unwrap();
+        let messages = scan_arweave_block_for_msgs(DataProtocol::B, 1630347, None).unwrap();
         println!("{:?}", messages);
         assert_eq!(
             messages.mappings[0].recipient,
