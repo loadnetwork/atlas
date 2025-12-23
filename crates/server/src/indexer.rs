@@ -368,7 +368,7 @@ impl AtlasIndexerClient {
     }
 
     pub async fn mainnet_indexing_info(&self) -> Result<Vec<MainnetProtocolInfo>, Error> {
-        let rows = self
+        let message_rows = self
             .client
             .query(
                 "select protocol, max(block_height) as block_height, max(ts) as indexed_at \
@@ -377,7 +377,33 @@ impl AtlasIndexerClient {
             )
             .fetch_all::<MainnetProgressRow>()
             .await?;
-        Ok(rows.into_iter().map(|row| row.into()).collect())
+        let state_rows = self
+            .client
+            .query(
+                "select protocol, last_complete_height, last_cursor, updated_at \
+                 from ao_mainnet_block_state \
+                 order by protocol, updated_at desc",
+            )
+            .fetch_all::<MainnetStateRow>()
+            .await?;
+        let mut state_map = std::collections::HashMap::new();
+        for row in state_rows {
+            state_map
+                .entry(row.protocol.clone())
+                .or_insert(row);
+        }
+        Ok(message_rows
+            .into_iter()
+            .map(|row| {
+                let mut info: MainnetProtocolInfo = row.into();
+                if let Some(state) = state_map.get(&info.protocol) {
+                    info.last_processed_height = Some(state.last_complete_height);
+                    info.last_cursor = Some(state.last_cursor.clone());
+                    info.last_processed_at = Some(state.updated_at);
+                }
+                info
+            })
+            .collect())
     }
 
     pub async fn latest_explorer_blocks(&self, limit: u64) -> Result<Vec<ExplorerBlock>, Error> {
@@ -837,6 +863,9 @@ impl From<MainnetProgressRow> for MainnetProtocolInfo {
     fn from(row: MainnetProgressRow) -> Self {
         let protocol = row.protocol;
         MainnetProtocolInfo {
+            last_processed_height: None,
+            last_processed_at: None,
+            last_cursor: None,
             start_height: protocol_start(&protocol),
             protocol,
             block_height: row.block_height,
@@ -852,6 +881,10 @@ pub struct MainnetProtocolInfo {
     pub start_height: u32,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub indexed_at: DateTime<Utc>,
+    pub last_processed_height: Option<u32>,
+    #[serde(with = "chrono::serde::ts_milliseconds_option")]
+    pub last_processed_at: Option<DateTime<Utc>>,
+    pub last_cursor: Option<String>,
 }
 
 fn protocol_start(protocol: &str) -> u32 {
@@ -876,4 +909,12 @@ struct ExplorerRecentDayRow {
     txs_roll: u64,
     processes_roll: u64,
     modules_roll: u64,
+}
+#[derive(Row, serde::Deserialize)]
+struct MainnetStateRow {
+    protocol: String,
+    last_complete_height: u32,
+    last_cursor: String,
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    updated_at: DateTime<Utc>,
 }
