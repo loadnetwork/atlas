@@ -180,3 +180,82 @@ pub async fn get_explorer_recent_days(
     let rows = client.recent_explorer_days(limit).await?;
     Ok(Json(serde_json::to_value(&rows)?))
 }
+
+pub async fn get_mainnet_recent_messages(
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, ServerError> {
+    let limit = params
+        .get("limit")
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(100);
+    let protocol = parse_protocol(params.get("protocol"))?;
+    let client = AtlasIndexerClient::new().await?;
+    let rows = client
+        .recent_mainnet_messages(protocol.as_deref(), limit)
+        .await?;
+    Ok(Json(serde_json::to_value(&rows)?))
+}
+
+pub async fn get_mainnet_block_messages(
+    Path(height): Path<u32>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, ServerError> {
+    let limit = params
+        .get("limit")
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(500);
+    let protocol = parse_protocol(params.get("protocol"))?;
+    let client = AtlasIndexerClient::new().await?;
+    let rows = client
+        .block_mainnet_messages(protocol.as_deref(), height, limit)
+        .await?;
+    Ok(Json(serde_json::to_value(&rows)?))
+}
+
+pub async fn get_mainnet_messages_by_tag(
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, ServerError> {
+    let limit = params
+        .get("limit")
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(100);
+    let protocol = parse_protocol(params.get("protocol"))?;
+    let key = params
+        .get("key")
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .ok_or_else(|| ServerError::from(anyhow!("missing tag key")))?;
+    let value = params
+        .get("value")
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .ok_or_else(|| ServerError::from(anyhow!("missing tag value")))?;
+    let client = AtlasIndexerClient::new().await?;
+    let rows = client
+        .mainnet_messages_by_tag(protocol.as_deref(), &key, &value, limit)
+        .await?;
+    Ok(Json(serde_json::to_value(&rows)?))
+}
+
+pub async fn get_mainnet_indexing_info() -> Result<Json<Value>, ServerError> {
+    let client = AtlasIndexerClient::new().await?;
+    let rows = client.mainnet_indexing_info().await?;
+    Ok(Json(serde_json::to_value(&rows)?))
+}
+
+fn parse_protocol(value: Option<&String>) -> Result<Option<String>, ServerError> {
+    if let Some(p) = value {
+        let normalized = p.trim().to_ascii_uppercase();
+        if normalized.is_empty() {
+            return Ok(None);
+        }
+        if normalized != "A" && normalized != "B" {
+            return Err(ServerError::from(anyhow!("invalid protocol (expected A or B)")));
+        }
+        return Ok(Some(normalized));
+    }
+    Ok(None)
+}

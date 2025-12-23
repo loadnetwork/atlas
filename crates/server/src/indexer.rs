@@ -259,6 +259,124 @@ impl AtlasIndexerClient {
         Ok(rows)
     }
 
+    pub async fn recent_mainnet_messages(
+        &self,
+        protocol: Option<&str>,
+        limit: u64,
+    ) -> Result<Vec<MainnetMessage>, Error> {
+        let where_clause = if protocol.is_some() {
+            " where m.protocol = ?"
+        } else {
+            ""
+        };
+        let sql = format!(
+            "select \
+                m.protocol, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, \
+                m.bundled_in, m.data_size, m.ts, \
+                arrayFilter(x -> x.1 != '', groupArray(tuple(ifNull(t.tag_key, ''), ifNull(t.tag_value, '')))) as tags \
+             from ao_mainnet_messages m \
+             left join ao_mainnet_message_tags t \
+               on t.protocol = m.protocol and t.block_height = m.block_height and t.msg_id = m.msg_id \
+             {} \
+             group by m.protocol, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, m.bundled_in, m.data_size, m.ts \
+             order by m.block_height desc, m.msg_id desc \
+             limit ?",
+            where_clause
+        );
+        let mut query = self.client.query(&sql);
+        if let Some(p) = protocol {
+            query = query.bind(p);
+        }
+        let rows = query.bind(limit).fetch_all::<MainnetMessageRow>().await?;
+        Ok(rows.into_iter().map(|row| row.into()).collect())
+    }
+
+    pub async fn block_mainnet_messages(
+        &self,
+        protocol: Option<&str>,
+        height: u32,
+        limit: u64,
+    ) -> Result<Vec<MainnetMessage>, Error> {
+        let mut clauses = vec!["m.block_height = ?".to_string()];
+        if protocol.is_some() {
+            clauses.push("m.protocol = ?".into());
+        }
+        let where_clause = format!(" where {}", clauses.join(" and "));
+        let sql = format!(
+            "select \
+                m.protocol, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, \
+                m.bundled_in, m.data_size, m.ts, \
+                arrayFilter(x -> x.1 != '', groupArray(tuple(ifNull(t.tag_key, ''), ifNull(t.tag_value, '')))) as tags \
+             from ao_mainnet_messages m \
+             left join ao_mainnet_message_tags t \
+               on t.protocol = m.protocol and t.block_height = m.block_height and t.msg_id = m.msg_id \
+             {} \
+             group by m.protocol, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, m.bundled_in, m.data_size, m.ts \
+             order by m.msg_id \
+             limit ?",
+            where_clause
+        );
+        let mut query = self.client.query(&sql).bind(height);
+        if let Some(p) = protocol {
+            query = query.bind(p);
+        }
+        let rows = query.bind(limit).fetch_all::<MainnetMessageRow>().await?;
+        Ok(rows.into_iter().map(|row| row.into()).collect())
+    }
+
+    pub async fn mainnet_messages_by_tag(
+        &self,
+        protocol: Option<&str>,
+        tag_key: &str,
+        tag_value: &str,
+        limit: u64,
+    ) -> Result<Vec<MainnetMessage>, Error> {
+        let protocol_clause = if protocol.is_some() {
+            " and m.protocol = ?"
+        } else {
+            ""
+        };
+        let sql = format!(
+            "select \
+                m.protocol, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, \
+                m.bundled_in, m.data_size, m.ts, \
+                arrayFilter(x -> x.1 != '', groupArray(tuple(ifNull(t.tag_key, ''), ifNull(t.tag_value, '')))) as tags \
+             from ao_mainnet_messages m \
+             inner join ao_mainnet_message_tags filter \
+               on filter.protocol = m.protocol and filter.block_height = m.block_height and filter.msg_id = m.msg_id \
+             left join ao_mainnet_message_tags t \
+               on t.protocol = m.protocol and t.block_height = m.block_height and t.msg_id = m.msg_id \
+             where filter.tag_key = ? and filter.tag_value = ?{} \
+             group by m.protocol, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, m.bundled_in, m.data_size, m.ts \
+             order by m.block_height desc, m.msg_id desc \
+             limit ?",
+            protocol_clause
+        );
+        let mut query = self
+            .client
+            .query(&sql)
+            .bind(tag_key)
+            .bind(tag_value);
+        if let Some(p) = protocol {
+            query = query.bind(p);
+        }
+        let rows = query.bind(limit).fetch_all::<MainnetMessageRow>().await?;
+        Ok(rows.into_iter().map(|row| row.into()).collect())
+    }
+
+    pub async fn mainnet_indexing_info(&self) -> Result<Vec<MainnetProtocolInfo>, Error> {
+        let rows = self
+            .client
+            .query(
+                "select protocol, max(block_height) as block_height, max(ts) as indexed_at \
+                 from ao_mainnet_messages \
+                 group by protocol",
+            )
+            .fetch_all::<MainnetProgressRow>()
+            .await?;
+        Ok(rows.into_iter().map(|row| row.into()).collect())
+    }
+
     pub async fn latest_explorer_blocks(&self, limit: u64) -> Result<Vec<ExplorerBlock>, Error> {
         let rows = self
             .client
@@ -644,6 +762,90 @@ pub struct ExplorerDayStats {
     pub txs_roll: u64,
     pub processes_roll: u64,
     pub modules_roll: u64,
+}
+
+#[derive(Row, serde::Deserialize)]
+struct MainnetMessageRow {
+    protocol: String,
+    block_height: u32,
+    block_timestamp: u64,
+    msg_id: String,
+    owner: String,
+    recipient: String,
+    bundled_in: String,
+    data_size: String,
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    ts: DateTime<Utc>,
+    tags: Vec<(String, String)>,
+}
+
+impl From<MainnetMessageRow> for MainnetMessage {
+    fn from(row: MainnetMessageRow) -> Self {
+        MainnetMessage {
+            protocol: row.protocol,
+            block_height: row.block_height,
+            block_timestamp: row.block_timestamp,
+            msg_id: row.msg_id,
+            owner: row.owner,
+            recipient: row.recipient,
+            bundled_in: row.bundled_in,
+            data_size: row.data_size,
+            tags: row
+                .tags
+                .into_iter()
+                .filter(|(k, _)| !k.is_empty())
+                .map(|(key, value)| MainnetMessageTag { key, value })
+                .collect(),
+            indexed_at: row.ts,
+        }
+    }
+}
+
+#[derive(Serialize, Clone)]
+pub struct MainnetMessage {
+    pub protocol: String,
+    pub block_height: u32,
+    pub block_timestamp: u64,
+    pub msg_id: String,
+    pub owner: String,
+    pub recipient: String,
+    pub bundled_in: String,
+    pub data_size: String,
+    pub tags: Vec<MainnetMessageTag>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub indexed_at: DateTime<Utc>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct MainnetMessageTag {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Row, serde::Deserialize)]
+struct MainnetProgressRow {
+    protocol: String,
+    block_height: u32,
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    indexed_at: DateTime<Utc>,
+}
+
+impl From<MainnetProgressRow> for MainnetProtocolInfo {
+    fn from(row: MainnetProgressRow) -> Self {
+        MainnetProtocolInfo {
+            protocol: row.protocol,
+            block_height: row.block_height,
+            indexed_at: row.indexed_at,
+        }
+    }
+}
+
+#[derive(Serialize, Clone)]
+pub struct MainnetProtocolInfo {
+    pub protocol: String,
+    pub block_height: u32,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub indexed_at: DateTime<Utc>,
 }
 
 #[derive(Row, serde::Deserialize)]
