@@ -48,6 +48,7 @@ impl Tag {
 pub struct MainnetBlockMessagesMeta {
     pub msg_id: String,
     pub owner: String,
+    pub recipient: String,
     pub block_height: u32,
     pub block_timestamp: u64,
     pub tags: Vec<Tag>,
@@ -76,10 +77,10 @@ query aoMainnet {
         tags: [$dataprotocol_tags]
         block: { min: $blockheight, max: $blockheight }
     ) {
-        count
         edges {
             node {
                 id
+                recipient
                 tags {
                     name
                     value
@@ -181,11 +182,18 @@ query aoMainnet {
             .unwrap_or_default()
             .to_string();
 
+        let recipient = node
+            .get("recipient")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+
         out.push(MainnetBlockMessagesMeta {
             msg_id: id.to_string(),
             block_height,
             block_timestamp,
             owner,
+            recipient,
             tags,
         });
     }
@@ -236,5 +244,17 @@ mod tests {
     fn scan_protocol_a_pre_genesis_test() {
         let err = scan_arweave_block_for_msgs(DataProtocol::A, DATA_PROTOCOL_A_START - 1, None);
         assert!(err.is_err());
+    }
+
+    #[test]
+    fn recipient_test() {
+        let messages =
+            scan_arweave_block_for_msgs(DataProtocol::B, 1630347, None).unwrap();
+        println!("{:?}", messages);
+        assert_eq!(
+            messages.mappings[0].recipient,
+            "nVOgez-AT87nS_42B9hwlz982BjH0YXp_RW3ezBHoew"
+        );
+        assert!(!messages.has_next_page);
     }
 }
