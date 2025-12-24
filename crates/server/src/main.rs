@@ -57,6 +57,7 @@ async fn main() {
         .route("/explorer/blocks", get(get_explorer_blocks))
         .route("/explorer/day", get(get_explorer_day_stats))
         .route("/explorer/days", get(get_explorer_recent_days))
+        // mainnet (ao.N.1)
         .route("/mainnet/messages/recent", get(get_mainnet_recent_messages))
         .route("/mainnet/messages/block/{height}", get(get_mainnet_block_messages))
         .route("/mainnet/messages/tags", get(get_mainnet_messages_by_tag))
