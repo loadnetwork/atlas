@@ -21,9 +21,16 @@ Base endpoint: https://atlas-server.decent.land
 - `GET /flp/minting/{project}` - returns the latest FLP's cycle `Own-Minting-Report` data
 - `GET /flp/metadata/all` - return a vector of the tracked FLPs and their metadata
 - `GET /flp/{project}/cycles?ticker={ticker}&limit={n}` - returns the total delegated assets for the `ticker`'s oracle (LST) cycle per `project`
+
+Legacy network (ao.TN.1) explorer stats:
 - `GET /explorer/blocks?limit=100` - emits the last N indexed blocks.
 - `GET /explorer/day?day=YYYY-MM-DD` - per-block unique counts + summed-over-block totals for the given date (defaults to `today`).
 - `GET /explorer/days?limit=N` - same payload as `/explorer/day`, aggregated for the last N days (defaults to 7). 
+
+Mainnet network (ao.N.1) explorer stats:
+- `GET /mainnet/explorer/blocks?limit=100` - emits the last N indexed blocks.
+- `GET /mainnet/explorer/day?day=YYYY-MM-DD` - per-block unique counts + summed-over-block totals for the given date (defaults to `today`).
+- `GET /mainnet/explorer/days?limit=N` - same payload as `/explorer/day`, aggregated for the last N days (defaults to 7). 
 
 > explorer N.B: Fields ending in `_over_blocks` are summed across blocks (no dedup over all-day blocks); other counters are unique per block and safe to sum.
 
