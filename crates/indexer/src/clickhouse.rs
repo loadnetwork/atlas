@@ -124,7 +124,7 @@ impl Clickhouse {
                 countIf(lowerUTF8(t.tag_key) = 'type' and lowerUTF8(t.tag_value) = 'process') as new_process_count, \
                 countIf(lowerUTF8(t.tag_key) = 'type' and lowerUTF8(t.tag_value) = 'module') as new_module_count, \
                 uniqExact(m.owner) as active_users, \
-                uniqExactIf(t.tag_value, lowerUTF8(t.tag_key) in ('from-process','process')) as active_processes \
+                uniqExactIf(t.tag_value, lowerUTF8(t.tag_key) in ('from-process','process','from-process-id','process-id')) as active_processes \
             from ao_mainnet_messages m \
             left join ao_mainnet_message_tags t \
               on t.protocol = m.protocol and t.block_height = m.block_height and t.msg_id = m.msg_id \
