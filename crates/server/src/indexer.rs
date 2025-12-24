@@ -413,6 +413,128 @@ impl AtlasIndexerClient {
             .collect())
     }
 
+    pub async fn mainnet_explorer_blocks(
+        &self,
+        limit: u64,
+    ) -> Result<Vec<ExplorerBlock>, Error> {
+        let rows = self
+            .client
+            .query(
+                "select ts, height, tx_count, eval_count, transfer_count, \
+                 new_process_count, new_module_count, active_users, active_processes, \
+                 tx_count_rolling, processes_rolling, modules_rolling \
+                 from ao_mainnet_explorer \
+                 order by height desc \
+                 limit ?",
+            )
+            .bind(limit)
+            .fetch_all::<ExplorerBlockRow>()
+            .await?;
+        Ok(rows.into_iter().map(|row| row.into()).collect())
+    }
+
+    pub async fn mainnet_daily_explorer_stats(
+        &self,
+        day: NaiveDate,
+    ) -> Result<ExplorerDayStats, Error> {
+        let start = day.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp();
+        let end = day
+            .succ_opt()
+            .unwrap_or(day)
+            .and_hms_opt(0, 0, 0)
+            .unwrap()
+            .and_utc()
+            .timestamp();
+        let rows = self
+            .client
+            .query(
+                "select count() as blocks, sum(tx_count) as txs, \
+                 sum(eval_count) as evals, sum(transfer_count) as transfers, \
+                 sum(new_process_count) as new_processes, sum(new_module_count) as new_modules, \
+                 sum(active_users) as active_users, sum(active_processes) as active_processes, \
+                 max(tx_count_rolling) as txs_roll, \
+                 max(processes_rolling) as processes_roll, \
+                 max(modules_rolling) as modules_roll \
+                 from ao_mainnet_explorer \
+                 where toUnixTimestamp(ts) >= ? and toUnixTimestamp(ts) < ?",
+            )
+            .bind(start)
+            .bind(end)
+            .fetch_all::<ExplorerDayAggRow>()
+            .await?;
+        let stats = rows.into_iter().next().unwrap_or(ExplorerDayAggRow {
+            blocks: 0,
+            txs: 0,
+            evals: 0,
+            transfers: 0,
+            new_processes: 0,
+            new_modules: 0,
+            active_users: 0,
+            active_processes: 0,
+            txs_roll: 0,
+            processes_roll: 0,
+            modules_roll: 0,
+        });
+        Ok(ExplorerDayStats {
+            day,
+            processed_blocks: stats.blocks,
+            txs: stats.txs,
+            evals: stats.evals,
+            transfers: stats.transfers,
+            new_processes_over_blocks: stats.new_processes,
+            new_modules_over_blocks: stats.new_modules,
+            active_users_over_blocks: stats.active_users,
+            active_processes_over_blocks: stats.active_processes,
+            txs_roll: stats.txs_roll,
+            processes_roll: stats.processes_roll,
+            modules_roll: stats.modules_roll,
+        })
+    }
+
+    pub async fn mainnet_recent_explorer_days(
+        &self,
+        limit: u64,
+    ) -> Result<Vec<ExplorerDayStats>, Error> {
+        let rows = self
+            .client
+            .query(
+                "select toInt64(toUnixTimestamp(toStartOfDay(ts))) as day_ts, \
+                 count() as blocks, sum(tx_count) as txs, \
+                 sum(eval_count) as evals, sum(transfer_count) as transfers, \
+                 sum(new_process_count) as new_processes, sum(new_module_count) as new_modules, \
+                 sum(active_users) as active_users, sum(active_processes) as active_processes, \
+                 max(tx_count_rolling) as txs_roll, \
+                 max(processes_rolling) as processes_roll, \
+                 max(modules_rolling) as modules_roll \
+                 from ao_mainnet_explorer \
+                 group by day_ts \
+                 order by day_ts desc \
+                 limit ?",
+            )
+            .bind(limit)
+            .fetch_all::<ExplorerRecentDayRow>()
+            .await?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                DateTime::<Utc>::from_timestamp(row.day_ts, 0).map(|dt| ExplorerDayStats {
+                    day: dt.date_naive(),
+                    processed_blocks: row.blocks,
+                    txs: row.txs,
+                    evals: row.evals,
+                    transfers: row.transfers,
+                    new_processes_over_blocks: row.new_processes,
+                    new_modules_over_blocks: row.new_modules,
+                    active_users_over_blocks: row.active_users,
+                    active_processes_over_blocks: row.active_processes,
+                    txs_roll: row.txs_roll,
+                    processes_roll: row.processes_roll,
+                    modules_roll: row.modules_roll,
+                })
+            })
+            .collect())
+    }
+
     pub async fn latest_explorer_blocks(&self, limit: u64) -> Result<Vec<ExplorerBlock>, Error> {
         let rows = self
             .client

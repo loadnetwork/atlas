@@ -37,6 +37,7 @@ impl Clickhouse {
             "create table if not exists flp_positions(ts DateTime64(3), ticker String, wallet String, eoa String, project String, factor UInt32, amount String) engine=ReplacingMergeTree order by (project, wallet, ts)",
             "create table if not exists delegation_mappings(ts DateTime64(3), height UInt32, tx_id String, wallet_from String, wallet_to String, factor UInt32) engine=ReplacingMergeTree order by (height, tx_id, wallet_from, wallet_to)",
             "create table if not exists atlas_explorer(ts DateTime64(3), height UInt64, tx_count UInt64, eval_count UInt64, transfer_count UInt64, new_process_count UInt64, new_module_count UInt64, active_users UInt64, active_processes UInt64, tx_count_rolling UInt64, processes_rolling UInt64, modules_rolling UInt64) engine=ReplacingMergeTree order by height",
+            "create table if not exists ao_mainnet_explorer(ts DateTime64(3), height UInt64, tx_count UInt64, eval_count UInt64, transfer_count UInt64, new_process_count UInt64, new_module_count UInt64, active_users UInt64, active_processes UInt64, tx_count_rolling UInt64, processes_rolling UInt64, modules_rolling UInt64) engine=ReplacingMergeTree order by height",
             "create table if not exists ao_mainnet_messages(ts DateTime64(3), protocol String, block_height UInt32, block_timestamp UInt64, msg_id String, owner String, recipient String, bundled_in String, data_size String) engine=ReplacingMergeTree order by (protocol, block_height, msg_id)",
             "create table if not exists ao_mainnet_message_tags(ts DateTime64(3), protocol String, block_height UInt32, msg_id String, tag_key String, tag_value String) engine=ReplacingMergeTree order by (tag_key, tag_value, block_height, msg_id)",
             "create table if not exists ao_mainnet_block_state(protocol String, last_complete_height UInt32, last_cursor String, updated_at DateTime64(3)) engine=ReplacingMergeTree order by protocol",
@@ -90,6 +91,55 @@ impl Clickhouse {
 
     pub async fn insert_mainnet_block_state(&self, rows: &[MainnetBlockStateRow]) -> Result<()> {
         self.insert_rows("ao_mainnet_block_state", rows).await
+    }
+
+    pub async fn truncate_mainnet_explorer(&self) -> Result<()> {
+        self.client
+            .query("truncate table if exists ao_mainnet_explorer")
+            .execute()
+            .await?;
+        Ok(())
+    }
+
+    pub async fn insert_mainnet_explorer_rows(
+        &self,
+        rows: &[MainnetExplorerRow],
+    ) -> Result<()> {
+        self.insert_rows("ao_mainnet_explorer", rows).await
+    }
+
+    pub async fn fetch_mainnet_block_metrics(
+        &self,
+        after_height: u32,
+        limit: u64,
+    ) -> Result<Vec<MainnetBlockMetricRow>> {
+        let query = "\
+            select \
+                toDateTime64(max(m.block_timestamp), 3) as ts, \
+                max(m.block_timestamp) as ts_unix, \
+                m.block_height as height, \
+                count() as tx_count, \
+                countIf(lowerUTF8(t.tag_key) = 'action' and lowerUTF8(t.tag_value) = 'eval') as eval_count, \
+                countIf(lowerUTF8(t.tag_key) = 'action' and lowerUTF8(t.tag_value) = 'transfer') as transfer_count, \
+                countIf(lowerUTF8(t.tag_key) = 'type' and lowerUTF8(t.tag_value) = 'process') as new_process_count, \
+                countIf(lowerUTF8(t.tag_key) = 'type' and lowerUTF8(t.tag_value) = 'module') as new_module_count, \
+                uniqExact(m.owner) as active_users, \
+                uniqExactIf(t.tag_value, lowerUTF8(t.tag_key) in ('from-process','process')) as active_processes \
+            from ao_mainnet_messages m \
+            left join ao_mainnet_message_tags t \
+              on t.protocol = m.protocol and t.block_height = m.block_height and t.msg_id = m.msg_id \
+            where m.block_height > ? \
+            group by m.block_height \
+            order by m.block_height asc \
+            limit ?";
+        let rows = self
+            .client
+            .query(query)
+            .bind(after_height)
+            .bind(limit)
+            .fetch_all::<MainnetBlockMetricRow>()
+            .await?;
+        Ok(rows)
     }
 
     pub async fn fetch_mainnet_block_state(
@@ -267,6 +317,38 @@ pub struct MainnetBlockStateRow {
     pub protocol: String,
     pub last_complete_height: u32,
     pub last_cursor: String,
+}
+
+#[derive(Clone, Debug, Row, Serialize)]
+pub struct MainnetExplorerRow {
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    pub ts: DateTime<Utc>,
+    pub height: u64,
+    pub tx_count: u64,
+    pub eval_count: u64,
+    pub transfer_count: u64,
+    pub new_process_count: u64,
+    pub new_module_count: u64,
+    pub active_users: u64,
+    pub active_processes: u64,
+    pub tx_count_rolling: u64,
+    pub processes_rolling: u64,
+    pub modules_rolling: u64,
+}
+
+#[derive(Clone, Debug, Row, Serialize, Deserialize)]
+pub struct MainnetBlockMetricRow {
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    pub ts: DateTime<Utc>,
+    pub ts_unix: u64,
+    pub height: u32,
+    pub tx_count: u64,
+    pub eval_count: u64,
+    pub transfer_count: u64,
+    pub new_process_count: u64,
+    pub new_module_count: u64,
+    pub active_users: u64,
+    pub active_processes: u64,
 }
 
 impl AtlasExplorerRow {

@@ -28,9 +28,9 @@ use tokio::{
 use crate::{
     backfill,
     clickhouse::{
-        AtlasExplorerRow, Clickhouse, DelegationMappingRow, FlpPositionRow, MainnetBlockStateRow,
-        MainnetMessageRow, MainnetMessageTagRow, OracleSnapshotRow, WalletBalanceRow,
-        WalletDelegationRow,
+        AtlasExplorerRow, Clickhouse, DelegationMappingRow, FlpPositionRow, MainnetBlockMetricRow,
+        MainnetBlockStateRow, MainnetExplorerRow, MainnetMessageRow, MainnetMessageTagRow,
+        OracleSnapshotRow, WalletBalanceRow, WalletDelegationRow,
     },
     config::Config,
 };
@@ -50,6 +50,7 @@ impl Indexer {
         self.clickhouse.ensure().await?;
         self.spawn_explorer_bridge().await?;
         self.spawn_mainnet_indexer().await?;
+        self.rebuild_mainnet_explorer().await?;
         // self.spawn_backfill();
         println!("indexer ready with tickers {:?}", self.config.tickers);
         self.run_once().await?;
@@ -111,6 +112,51 @@ impl Indexer {
                 }
             });
         }
+        Ok(())
+    }
+
+    async fn rebuild_mainnet_explorer(&self) -> Result<()> {
+        println!("rebuilding ao mainnet explorer table from scratch");
+        self.clickhouse.truncate_mainnet_explorer().await?;
+        let mut last_height: u32 = 0;
+        let mut tx_roll: u64 = 0;
+        let mut proc_roll: u64 = 0;
+        let mut mod_roll: u64 = 0;
+        loop {
+            let metrics = self
+                .clickhouse
+                .fetch_mainnet_block_metrics(last_height, 512)
+                .await?;
+            if metrics.is_empty() {
+                break;
+            }
+            let mut rows = Vec::with_capacity(metrics.len());
+            for metric in metrics {
+                last_height = metric.height;
+                tx_roll += metric.tx_count;
+                proc_roll += metric.new_process_count;
+                mod_roll += metric.new_module_count;
+                rows.push(MainnetExplorerRow {
+                    ts: metric.ts,
+                    height: metric.height as u64,
+                    tx_count: metric.tx_count,
+                    eval_count: metric.eval_count,
+                    transfer_count: metric.transfer_count,
+                    new_process_count: metric.new_process_count,
+                    new_module_count: metric.new_module_count,
+                    active_users: metric.active_users,
+                    active_processes: metric.active_processes,
+                    tx_count_rolling: tx_roll,
+                    processes_rolling: proc_roll,
+                    modules_rolling: mod_roll,
+                });
+            }
+            self.clickhouse
+                .insert_mainnet_explorer_rows(&rows)
+                .await?;
+            println!("mainnet explorer indexed up to height {}", last_height);
+        }
+        println!("ao mainnet explorer rebuild complete");
         Ok(())
     }
 
