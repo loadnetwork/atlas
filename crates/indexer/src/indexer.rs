@@ -375,21 +375,17 @@ async fn run_mainnet_worker(
             .max_mainnet_height(&protocol_name)
             .await?
             .unwrap_or_else(|| start.saturating_sub(1));
-        let network_tip = fetch_network_height()
-            .await
-            .unwrap_or(indexed_height as u64);
-        if state.last_complete_height as u64 > network_tip {
-            let clamp_height = indexed_height.min(network_tip.min(u32::MAX as u64) as u32);
+        if state.last_complete_height > indexed_height {
             println!(
-                "mainnet protocol {} stored height {} exceeds network tip {}, clamping to indexed {}",
-                protocol_name, state.last_complete_height, network_tip, clamp_height
+                "mainnet protocol {} stored height {} exceeds indexed {}, clamping",
+                protocol_name, state.last_complete_height, indexed_height
             );
-            state.last_complete_height = clamp_height;
+            state.last_complete_height = indexed_height;
             state.last_cursor.clear();
             let clamp_row = MainnetBlockStateRow {
                 updated_at: Utc::now(),
                 protocol: protocol_name.clone(),
-                last_complete_height: clamp_height,
+                last_complete_height: indexed_height,
                 last_cursor: String::new(),
             };
             clickhouse
