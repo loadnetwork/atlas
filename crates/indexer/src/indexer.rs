@@ -367,10 +367,31 @@ async fn run_mainnet_worker(
     let protocol_name = protocol_label(protocol).to_string();
     let mut height = start;
     let mut cursor = None;
-    if let Some(state) = clickhouse
+    if let Some(mut state) = clickhouse
         .fetch_mainnet_block_state(&protocol_name)
         .await?
     {
+        let indexed_height = clickhouse
+            .max_mainnet_height(&protocol_name)
+            .await?
+            .unwrap_or_else(|| start.saturating_sub(1));
+        if state.last_complete_height > indexed_height {
+            println!(
+                "mainnet protocol {} stored height {} exceeds indexed {}, clamping",
+                protocol_name, state.last_complete_height, indexed_height
+            );
+            state.last_complete_height = indexed_height;
+            state.last_cursor.clear();
+            let clamp_row = MainnetBlockStateRow {
+                updated_at: Utc::now(),
+                protocol: protocol_name.clone(),
+                last_complete_height: indexed_height,
+                last_cursor: String::new(),
+            };
+            clickhouse
+                .insert_mainnet_block_state(&[clamp_row])
+                .await?;
+        }
         if state.last_cursor.is_empty() {
             height = state
                 .last_complete_height

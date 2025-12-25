@@ -142,6 +142,23 @@ impl Clickhouse {
         Ok(rows)
     }
 
+    pub async fn max_mainnet_height(&self, protocol: &str) -> Result<Option<u32>> {
+        let row = self
+            .client
+            .query(
+                "select max(block_height) as height \
+                 from ao_mainnet_messages \
+                 where protocol = ?",
+            )
+            .bind(protocol)
+            .fetch_all::<MainnetMaxHeightRow>()
+            .await?;
+        Ok(row
+            .into_iter()
+            .next()
+            .and_then(|r| r.height))
+    }
+
     pub async fn fetch_mainnet_block_state(
         &self,
         protocol: &str,
@@ -410,4 +427,9 @@ impl From<ExplorerSelectRow> for BlockStats {
 #[derive(Debug, Row, Serialize, serde::Deserialize)]
 struct CountRow {
     pub cnt: u64,
+}
+
+#[derive(Debug, Row, Serialize, serde::Deserialize)]
+struct MainnetMaxHeightRow {
+    pub height: Option<u32>,
 }
