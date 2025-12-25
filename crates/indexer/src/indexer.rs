@@ -48,6 +48,10 @@ impl Indexer {
 
     pub async fn run(&self) -> Result<()> {
         self.clickhouse.ensure().await?;
+        println!("forcing protocol B state to 1822614");
+        self.clickhouse
+            .force_mainnet_block_state("B", 1_822_614)
+            .await?;
         self.spawn_explorer_bridge().await?;
         self.spawn_mainnet_indexer().await?;
         self.rebuild_mainnet_explorer().await?;
