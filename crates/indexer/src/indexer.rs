@@ -36,7 +36,7 @@ use crate::{
 };
 use explorer;
 
-const ARWEAVE_TIP_SAFE_GAP: u64 = 2;
+const ARWEAVE_TIP_SAFE_GAP: u64 = 3;
 
 pub struct Indexer {
     config: Config,
@@ -50,7 +50,7 @@ impl Indexer {
 
     pub async fn run(&self) -> Result<()> {
         self.clickhouse.ensure().await?;
-        self.reindex_mainnet_gap(1_821_500).await?;
+        // self.reindex_mainnet_gap(1_821_500).await?;
         self.spawn_explorer_bridge().await?;
         self.spawn_mainnet_indexer().await?;
         self.rebuild_mainnet_explorer().await?;
