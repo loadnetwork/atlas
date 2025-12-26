@@ -101,10 +101,7 @@ impl Clickhouse {
         Ok(())
     }
 
-    pub async fn insert_mainnet_explorer_rows(
-        &self,
-        rows: &[MainnetExplorerRow],
-    ) -> Result<()> {
+    pub async fn insert_mainnet_explorer_rows(&self, rows: &[MainnetExplorerRow]) -> Result<()> {
         self.insert_rows("ao_mainnet_explorer", rows).await
     }
 

@@ -6,8 +6,8 @@ use common::{
     gateway::get_ar_balance,
     gql::OracleStakers,
     mainnet::{
-        DataProtocol, MainnetBlockMessagesMeta, MainnetBlockMessagesPage,
-        get_network_height, scan_arweave_block_for_msgs,
+        DataProtocol, MainnetBlockMessagesMeta, MainnetBlockMessagesPage, get_network_height,
+        scan_arweave_block_for_msgs,
     },
     projects::Project,
 };
@@ -27,6 +27,7 @@ use tokio::{
 
 use crate::{
     backfill,
+    backfill::run_mainnet_gap_worker,
     clickhouse::{
         AtlasExplorerRow, Clickhouse, DelegationMappingRow, FlpPositionRow, MainnetBlockMetricRow,
         MainnetBlockStateRow, MainnetExplorerRow, MainnetMessageRow, MainnetMessageTagRow,
@@ -162,9 +163,7 @@ impl Indexer {
                     modules_rolling: mod_roll,
                 });
             }
-            self.clickhouse
-                .insert_mainnet_explorer_rows(&rows)
-                .await?;
+            self.clickhouse.insert_mainnet_explorer_rows(&rows).await?;
             println!("mainnet explorer indexed up to height {}", last_height);
         }
         println!("ao mainnet explorer rebuild complete");
@@ -181,15 +180,15 @@ impl Indexer {
         Ok(())
     }
 
-    fn spawn_backfill(&self) {
-        println!("backfill called");
-        let clickhouse = self.clickhouse.clone();
-        tokio::spawn(async move {
-            if let Err(err) = backfill::run(clickhouse).await {
-                eprintln!("delegation backfill error: {err:?}");
-            }
-        });
-    }
+    // fn spawn_backfill(&self) {
+    //     println!("backfill called");
+    //     let clickhouse = self.clickhouse.clone();
+    //     tokio::spawn(async move {
+    //         if let Err(err) = backfill::run(clickhouse).await {
+    //             eprintln!("delegation backfill error: {err:?}");
+    //         }
+    //     });
+    // }
 
     async fn index_ticker(&self, ticker: &str) -> Result<()> {
         let now = Utc::now();
@@ -388,10 +387,7 @@ async fn run_mainnet_worker(
     let protocol_name = protocol_label(protocol).to_string();
     let mut height = start;
     let mut cursor = None;
-    if let Some(state) = clickhouse
-        .fetch_mainnet_block_state(&protocol_name)
-        .await?
-    {
+    if let Some(state) = clickhouse.fetch_mainnet_block_state(&protocol_name).await? {
         height = state.last_complete_height.max(start);
         if !state.last_cursor.is_empty() {
             cursor = Some(state.last_cursor);
@@ -417,7 +413,7 @@ async fn run_mainnet_worker(
             }
             if height as u64 + ARWEAVE_TIP_SAFE_GAP > network_tip {
                 println!(
-                    "mainnet protocol {} waiting, height {} exceeds tip {} with gap 2",
+                    "mainnet protocol {} waiting, height {} exceeds tip {} with gap {ARWEAVE_TIP_SAFE_GAP}",
                     protocol_name, height, network_tip
                 );
                 sleep(Duration::from_secs(60)).await;
@@ -435,9 +431,7 @@ async fn run_mainnet_worker(
                         last_complete_height: height,
                         last_cursor: String::new(),
                     };
-                    clickhouse
-                        .insert_mainnet_block_state(&[state_row])
-                        .await?;
+                    clickhouse.insert_mainnet_block_state(&[state_row]).await?;
                     height = height.saturating_add(1);
                 } else {
                     eprintln!(
@@ -492,9 +486,7 @@ async fn run_mainnet_worker(
             }
         }
         clickhouse.insert_mainnet_messages(&message_rows).await?;
-        clickhouse
-            .insert_mainnet_message_tags(&tag_rows)
-            .await?;
+        clickhouse.insert_mainnet_message_tags(&tag_rows).await?;
         cursor = if page.has_next_page {
             page.end_cursor.clone()
         } else {
@@ -506,9 +498,7 @@ async fn run_mainnet_worker(
             last_complete_height: height,
             last_cursor: cursor.clone().unwrap_or_default(),
         };
-        clickhouse
-            .insert_mainnet_block_state(&[state_row])
-            .await?;
+        clickhouse.insert_mainnet_block_state(&[state_row]).await?;
         println!(
             "mainnet protocol {} height {} stored {} msgs",
             protocol_name,
@@ -522,7 +512,7 @@ async fn run_mainnet_worker(
     }
 }
 
-async fn fetch_mainnet_page(
+pub async fn fetch_mainnet_page(
     protocol: DataProtocol,
     height: u32,
     cursor: Option<String>,
@@ -533,19 +523,19 @@ async fn fetch_mainnet_page(
     .await??)
 }
 
-async fn fetch_network_height() -> Result<u64> {
+pub async fn fetch_network_height() -> Result<u64> {
     let height = tokio::task::spawn_blocking(|| get_network_height()).await??;
     Ok(height)
 }
 
-fn protocol_label(protocol: DataProtocol) -> &'static str {
+pub fn protocol_label(protocol: DataProtocol) -> &'static str {
     match protocol {
         DataProtocol::A => "A",
         DataProtocol::B => "B",
     }
 }
 
-fn is_empty_block_error(err: &anyhow::Error) -> bool {
+pub fn is_empty_block_error(err: &anyhow::Error) -> bool {
     let msg = err.to_string();
     msg.contains("no ao message id found")
 }
@@ -591,86 +581,4 @@ async fn run_mainnet_explorer_tail(clickhouse: Clickhouse) -> Result<()> {
         }
         clickhouse.insert_mainnet_explorer_rows(&rows).await?;
     }
-}
-async fn run_mainnet_gap_worker(
-    clickhouse: Clickhouse,
-    protocol: DataProtocol,
-    start: u32,
-) -> Result<()> {
-    let protocol_name = protocol_label(protocol).to_string();
-    let mut height = start;
-    let mut cursor = None;
-    loop {
-        let tip = fetch_network_height().await.unwrap_or(height as u64);
-        if height as u64 + ARWEAVE_TIP_SAFE_GAP > tip {
-            break;
-        }
-        let page = match fetch_mainnet_page(protocol, height, cursor.clone()).await {
-            Ok(page) => page,
-            Err(err) => {
-                if is_empty_block_error(&err) {
-                    cursor = None;
-                    println!("gap protocol {} height {} empty", protocol_name, height);
-                    height = height.saturating_add(1);
-                } else {
-                    eprintln!(
-                        "gap fetch error protocol={} height={} err={err:?}",
-                        protocol_name, height
-                    );
-                    sleep(Duration::from_secs(1)).await;
-                }
-                continue;
-            }
-        };
-        let ts = Utc::now();
-        let mut message_rows = Vec::with_capacity(page.mappings.len());
-        let mut tag_rows = Vec::new();
-        for meta in page.mappings {
-            let MainnetBlockMessagesMeta {
-                msg_id,
-                owner,
-                recipient,
-                block_height,
-                block_timestamp,
-                bundled_in,
-                data_size,
-                tags,
-            } = meta;
-            let msg_id_for_tags = msg_id.clone();
-            message_rows.push(MainnetMessageRow {
-                ts,
-                protocol: protocol_name.clone(),
-                block_height,
-                block_timestamp,
-                msg_id,
-                owner,
-                recipient,
-                bundled_in,
-                data_size,
-            });
-            for tag in tags {
-                tag_rows.push(MainnetMessageTagRow {
-                    ts,
-                    protocol: protocol_name.clone(),
-                    block_height,
-                    msg_id: msg_id_for_tags.clone(),
-                    tag_key: tag.key,
-                    tag_value: tag.value,
-                });
-            }
-        }
-        clickhouse.insert_mainnet_messages(&message_rows).await?;
-        clickhouse
-            .insert_mainnet_message_tags(&tag_rows)
-            .await?;
-        cursor = if page.has_next_page {
-            page.end_cursor.clone()
-        } else {
-            None
-        };
-        if cursor.is_none() {
-            height = height.saturating_add(1);
-        }
-    }
-    Ok(())
 }
