@@ -13,6 +13,22 @@ pub struct AtlasIndexerClient {
     client: clickhouse::Client,
 }
 
+enum BindValue {
+    Str(String),
+    U64(u64),
+    U32(u32),
+}
+
+impl BindValue {
+    fn apply(self, query: clickhouse::query::Query) -> clickhouse::query::Query {
+        match self {
+            BindValue::Str(val) => query.bind(val),
+            BindValue::U64(val) => query.bind(val),
+            BindValue::U32(val) => query.bind(val),
+        }
+    }
+}
+
 impl AtlasIndexerClient {
     pub async fn new() -> Result<Self, Error> {
         let url = get_env_var("CLICKHOUSE_URL").unwrap_or_else(|_| "http://localhost:8123".into());
@@ -535,6 +551,189 @@ impl AtlasIndexerClient {
             .collect())
     }
 
+    pub async fn ao_token_messages(
+        &self,
+        source: Option<&str>,
+        action: Option<&str>,
+        min_qty: Option<&str>,
+        max_qty: Option<&str>,
+        from_ts: Option<u64>,
+        to_ts: Option<u64>,
+        block_min: Option<u32>,
+        block_max: Option<u32>,
+        recipient: Option<&str>,
+        sender: Option<&str>,
+        limit: u64,
+        offset: u64,
+    ) -> Result<Vec<AoTokenMessage>, Error> {
+        let mut joins = Vec::new();
+        let mut where_clauses = Vec::new();
+        let mut binds: Vec<BindValue> = Vec::new();
+
+        if let Some(val) = action {
+            joins.push(
+                "inner join ao_token_message_tags action_filter \
+                 on action_filter.source = m.source and action_filter.block_height = m.block_height \
+                 and action_filter.msg_id = m.msg_id and action_filter.tag_key = 'Action' \
+                 and action_filter.tag_value = ?"
+                    .to_string(),
+            );
+            binds.push(BindValue::Str(val.to_string()));
+        }
+        if let Some(val) = recipient {
+            joins.push(
+                "inner join ao_token_message_tags recipient_filter \
+                 on recipient_filter.source = m.source and recipient_filter.block_height = m.block_height \
+                 and recipient_filter.msg_id = m.msg_id and recipient_filter.tag_key = 'Recipient' \
+                 and recipient_filter.tag_value = ?"
+                    .to_string(),
+            );
+            binds.push(BindValue::Str(val.to_string()));
+        }
+        if let Some(val) = sender {
+            joins.push(
+                "inner join ao_token_message_tags sender_filter \
+                 on sender_filter.source = m.source and sender_filter.block_height = m.block_height \
+                 and sender_filter.msg_id = m.msg_id and sender_filter.tag_key = 'Sender' \
+                 and sender_filter.tag_value = ?"
+                    .to_string(),
+            );
+            binds.push(BindValue::Str(val.to_string()));
+        }
+        if min_qty.is_some() || max_qty.is_some() {
+            joins.push(
+                "inner join ao_token_message_tags qty_filter \
+                 on qty_filter.source = m.source and qty_filter.block_height = m.block_height \
+                 and qty_filter.msg_id = m.msg_id and qty_filter.tag_key = 'Quantity'"
+                    .to_string(),
+            );
+        }
+        if let Some(val) = min_qty {
+            where_clauses.push("toUInt128OrZero(qty_filter.tag_value) >= toUInt128OrZero(?)");
+            binds.push(BindValue::Str(val.to_string()));
+        }
+        if let Some(val) = max_qty {
+            where_clauses.push("toUInt128OrZero(qty_filter.tag_value) <= toUInt128OrZero(?)");
+            binds.push(BindValue::Str(val.to_string()));
+        }
+        if let Some(val) = source {
+            where_clauses.push("m.source = ?");
+            binds.push(BindValue::Str(val.to_string()));
+        }
+        if let Some(val) = from_ts {
+            where_clauses.push("m.block_timestamp >= ?");
+            binds.push(BindValue::U64(val));
+        }
+        if let Some(val) = to_ts {
+            where_clauses.push("m.block_timestamp <= ?");
+            binds.push(BindValue::U64(val));
+        }
+        if let Some(val) = block_min {
+            where_clauses.push("m.block_height >= ?");
+            binds.push(BindValue::U32(val));
+        }
+        if let Some(val) = block_max {
+            where_clauses.push("m.block_height <= ?");
+            binds.push(BindValue::U32(val));
+        }
+
+        let join_clause = if joins.is_empty() {
+            String::new()
+        } else {
+            format!("\n{}", joins.join("\n"))
+        };
+        let where_clause = if where_clauses.is_empty() {
+            String::new()
+        } else {
+            format!("\nwhere {}", where_clauses.join(" and "))
+        };
+        let sql = format!(
+            "select \
+                m.source, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, \
+                m.bundled_in, m.data_size, m.ts, \
+                arrayFilter(x -> x.1 != '', groupArray(tuple(ifNull(t.tag_key, ''), ifNull(t.tag_value, '')))) as tags \
+             from ao_token_messages m \
+             left join ao_token_message_tags t \
+               on t.source = m.source and t.block_height = m.block_height and t.msg_id = m.msg_id \
+             {} \
+             {} \
+             group by m.source, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, m.bundled_in, m.data_size, m.ts \
+             order by m.block_height desc, m.msg_id desc \
+             limit ? offset ?",
+            join_clause, where_clause
+        );
+        let mut query = self.client.query(&sql);
+        for bind in binds {
+            query = bind.apply(query);
+        }
+        let rows = query
+            .bind(limit)
+            .bind(offset)
+            .fetch_all::<AoTokenMessageRow>()
+            .await?;
+        Ok(rows.into_iter().map(|row| row.into()).collect())
+    }
+
+    pub async fn ao_token_message_by_id(
+        &self,
+        msg_id: &str,
+    ) -> Result<Vec<AoTokenMessage>, Error> {
+        let sql = "\
+            select \
+                m.source, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, \
+                m.bundled_in, m.data_size, m.ts, \
+                arrayFilter(x -> x.1 != '', groupArray(tuple(ifNull(t.tag_key, ''), ifNull(t.tag_value, '')))) as tags \
+             from ao_token_messages m \
+             left join ao_token_message_tags t \
+               on t.source = m.source and t.block_height = m.block_height and t.msg_id = m.msg_id \
+             where m.msg_id = ? \
+             group by m.source, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, m.bundled_in, m.data_size, m.ts \
+             order by m.block_height desc, m.msg_id desc";
+        let rows = self
+            .client
+            .query(sql)
+            .bind(msg_id)
+            .fetch_all::<AoTokenMessageRow>()
+            .await?;
+        Ok(rows.into_iter().map(|row| row.into()).collect())
+    }
+
+    pub async fn ao_token_messages_by_tag(
+        &self,
+        source: Option<&str>,
+        tag_key: &str,
+        tag_value: &str,
+        limit: u64,
+    ) -> Result<Vec<AoTokenMessage>, Error> {
+        let source_clause = if source.is_some() {
+            " and m.source = ?"
+        } else {
+            ""
+        };
+        let sql = format!(
+            "select \
+                m.source, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, \
+                m.bundled_in, m.data_size, m.ts, \
+                arrayFilter(x -> x.1 != '', groupArray(tuple(ifNull(t.tag_key, ''), ifNull(t.tag_value, '')))) as tags \
+             from ao_token_messages m \
+             inner join ao_token_message_tags filter \
+               on filter.source = m.source and filter.block_height = m.block_height and filter.msg_id = m.msg_id \
+             left join ao_token_message_tags t \
+               on t.source = m.source and t.block_height = m.block_height and t.msg_id = m.msg_id \
+             where filter.tag_key = ? and filter.tag_value = ?{} \
+             group by m.source, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, m.bundled_in, m.data_size, m.ts \
+             order by m.block_height desc, m.msg_id desc \
+             limit ?",
+            source_clause
+        );
+        let mut query = self.client.query(&sql).bind(tag_key).bind(tag_value);
+        if let Some(src) = source {
+            query = query.bind(src);
+        }
+        let rows = query.bind(limit).fetch_all::<AoTokenMessageRow>().await?;
+        Ok(rows.into_iter().map(|row| row.into()).collect())
+    }
+
     pub async fn latest_explorer_blocks(&self, limit: u64) -> Result<Vec<ExplorerBlock>, Error> {
         let rows = self
             .client
@@ -663,6 +862,9 @@ async fn ensure_schema(
         "create table if not exists flp_positions(ts DateTime64(3), ticker String, wallet String, eoa String, project String, factor UInt32, amount String) engine=ReplacingMergeTree order by (project, wallet, ts)",
         "create table if not exists delegation_mappings(ts DateTime64(3), height UInt32, tx_id String, wallet_from String, wallet_to String, factor UInt32) engine=ReplacingMergeTree order by (height, tx_id, wallet_from, wallet_to)",
         "create table if not exists atlas_explorer(ts DateTime64(3), height UInt64, tx_count UInt64, eval_count UInt64, transfer_count UInt64, new_process_count UInt64, new_module_count UInt64, active_users UInt64, active_processes UInt64, tx_count_rolling UInt64, processes_rolling UInt64, modules_rolling UInt64) engine=ReplacingMergeTree order by height",
+        "create table if not exists ao_token_messages(ts DateTime64(3), source String, block_height UInt32, block_timestamp UInt64, msg_id String, owner String, recipient String, bundled_in String, data_size String) engine=ReplacingMergeTree order by (source, block_height, msg_id)",
+        "create table if not exists ao_token_message_tags(ts DateTime64(3), source String, block_height UInt32, msg_id String, tag_key String, tag_value String) engine=ReplacingMergeTree order by (source, tag_key, tag_value, block_height, msg_id)",
+        "create table if not exists ao_token_block_state(last_complete_height UInt32, updated_at DateTime64(3)) engine=ReplacingMergeTree order by updated_at",
     ];
     for stmt in stmts {
         client.query(stmt).execute().await?;
@@ -976,6 +1178,64 @@ pub struct MainnetMessage {
 
 #[derive(Serialize, Clone)]
 pub struct MainnetMessageTag {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Row, serde::Deserialize)]
+struct AoTokenMessageRow {
+    source: String,
+    block_height: u32,
+    block_timestamp: u64,
+    msg_id: String,
+    owner: String,
+    recipient: String,
+    bundled_in: String,
+    data_size: String,
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    ts: DateTime<Utc>,
+    tags: Vec<(String, String)>,
+}
+
+impl From<AoTokenMessageRow> for AoTokenMessage {
+    fn from(row: AoTokenMessageRow) -> Self {
+        AoTokenMessage {
+            source: row.source,
+            block_height: row.block_height,
+            block_timestamp: row.block_timestamp,
+            msg_id: row.msg_id,
+            owner: row.owner,
+            recipient: row.recipient,
+            bundled_in: row.bundled_in,
+            data_size: row.data_size,
+            tags: row
+                .tags
+                .into_iter()
+                .filter(|(k, _)| !k.is_empty())
+                .map(|(key, value)| AoTokenMessageTag { key, value })
+                .collect(),
+            indexed_at: row.ts,
+        }
+    }
+}
+
+#[derive(Serialize, Clone)]
+pub struct AoTokenMessage {
+    pub source: String,
+    pub block_height: u32,
+    pub block_timestamp: u64,
+    pub msg_id: String,
+    pub owner: String,
+    pub recipient: String,
+    pub bundled_in: String,
+    pub data_size: String,
+    pub tags: Vec<AoTokenMessageTag>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub indexed_at: DateTime<Utc>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct AoTokenMessageTag {
     pub key: String,
     pub value: String,
 }

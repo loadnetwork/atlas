@@ -1,8 +1,8 @@
 use crate::{
     errors::ServerError,
     indexer::{
-        AtlasIndexerClient, DelegationHeight, DelegationMappingHistory, ExplorerBlock,
-        ExplorerDayStats, MultiDelegator, ProjectCycleTotal,
+        AoTokenMessage, AtlasIndexerClient, DelegationHeight, DelegationMappingHistory,
+        ExplorerBlock, ExplorerDayStats, MultiDelegator, ProjectCycleTotal,
     },
 };
 use anyhow::anyhow;
@@ -290,6 +290,97 @@ pub async fn get_mainnet_indexing_info() -> Result<Json<Value>, ServerError> {
     Ok(Json(serde_json::to_value(&rows)?))
 }
 
+pub async fn get_ao_token_txs(
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, ServerError> {
+    let limit = params
+        .get("limit")
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(100);
+    let offset = params
+        .get("offset")
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(0);
+    let source = params
+        .get("source")
+        .map(|v| v.trim().to_ascii_lowercase())
+        .filter(|v| v == "transfer" || v == "process");
+    let action = params
+        .get("action")
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
+    let recipient = params
+        .get("recipient")
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
+    let sender = params
+        .get("sender")
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
+    let min_qty = parse_amount_param(params.get("min_amount"))?;
+    let max_qty = parse_amount_param(params.get("max_amount"))?;
+    let from_ts = parse_u64_param(params.get("from_ts"))?;
+    let to_ts = parse_u64_param(params.get("to_ts"))?;
+    let block_min = parse_u32_param(params.get("block_min"))?;
+    let block_max = parse_u32_param(params.get("block_max"))?;
+    let client = AtlasIndexerClient::new().await?;
+    let rows: Vec<AoTokenMessage> = client
+        .ao_token_messages(
+            source.as_deref(),
+            action.as_deref(),
+            min_qty.as_deref(),
+            max_qty.as_deref(),
+            from_ts,
+            to_ts,
+            block_min,
+            block_max,
+            recipient.as_deref(),
+            sender.as_deref(),
+            limit,
+            offset,
+        )
+        .await?;
+    Ok(Json(serde_json::to_value(&rows)?))
+}
+
+pub async fn get_ao_token_tx(
+    Path(msg_id): Path<String>,
+) -> Result<Json<Value>, ServerError> {
+    let client = AtlasIndexerClient::new().await?;
+    let rows = client.ao_token_message_by_id(&msg_id).await?;
+    Ok(Json(serde_json::to_value(&rows)?))
+}
+
+pub async fn get_ao_token_messages_by_tag(
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, ServerError> {
+    let limit = params
+        .get("limit")
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(100);
+    let source = params
+        .get("source")
+        .map(|v| v.trim().to_ascii_lowercase())
+        .filter(|v| v == "transfer" || v == "process");
+    let key = params
+        .get("key")
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .ok_or_else(|| ServerError::from(anyhow!("missing tag key")))?;
+    let value = params
+        .get("value")
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .ok_or_else(|| ServerError::from(anyhow!("missing tag value")))?;
+    let client = AtlasIndexerClient::new().await?;
+    let rows = client
+        .ao_token_messages_by_tag(source.as_deref(), &key, &value, limit)
+        .await?;
+    Ok(Json(serde_json::to_value(&rows)?))
+}
+
 fn parse_protocol(value: Option<&String>) -> Result<Option<String>, ServerError> {
     if let Some(p) = value {
         let normalized = p.trim().to_ascii_uppercase();
@@ -339,4 +430,75 @@ fn to_header_case(input: &str) -> String {
         }
     }
     result
+}
+
+fn parse_u64_param(value: Option<&String>) -> Result<Option<u64>, ServerError> {
+    let Some(raw) = value else {
+        return Ok(None);
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    let parsed = trimmed
+        .parse::<u64>()
+        .map_err(|_| ServerError::from(anyhow!("invalid u64 value")))?;
+    Ok(Some(parsed))
+}
+
+fn parse_u32_param(value: Option<&String>) -> Result<Option<u32>, ServerError> {
+    let Some(raw) = value else {
+        return Ok(None);
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    let parsed = trimmed
+        .parse::<u32>()
+        .map_err(|_| ServerError::from(anyhow!("invalid u32 value")))?;
+    Ok(Some(parsed))
+}
+
+fn parse_amount_param(value: Option<&String>) -> Result<Option<String>, ServerError> {
+    let Some(raw) = value else {
+        return Ok(None);
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(parse_human_amount_to_raw(trimmed)?))
+}
+
+fn parse_human_amount_to_raw(input: &str) -> Result<String, ServerError> {
+    let mut parts = input.split('.');
+    let whole_part = parts.next().unwrap_or("");
+    let frac_part = parts.next().unwrap_or("");
+    if parts.next().is_some() {
+        return Err(ServerError::from(anyhow!("invalid amount format")));
+    }
+    let whole = if whole_part.is_empty() { "0" } else { whole_part };
+    if !whole.chars().all(|c| c.is_ascii_digit()) {
+        return Err(ServerError::from(anyhow!("invalid amount format")));
+    }
+    if !frac_part.chars().all(|c| c.is_ascii_digit()) {
+        return Err(ServerError::from(anyhow!("invalid amount format")));
+    }
+    if frac_part.len() > 12 {
+        return Err(ServerError::from(anyhow!(
+            "amount has more than 12 decimal places"
+        )));
+    }
+    let mut raw = String::with_capacity(whole.len() + 12);
+    raw.push_str(whole);
+    raw.push_str(frac_part);
+    for _ in 0..(12 - frac_part.len()) {
+        raw.push('0');
+    }
+    let trimmed = raw.trim_start_matches('0');
+    if trimmed.is_empty() {
+        return Ok("0".to_string());
+    }
+    Ok(trimmed.to_string())
 }

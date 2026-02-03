@@ -1,6 +1,7 @@
 use crate::routes::{
     get_all_projects_metadata_handler, get_ar_wallet_identity, get_delegation_mapping_heights,
-    get_eoa_wallet_identity, get_explorer_blocks, get_explorer_day_stats, get_explorer_recent_days,
+    get_ao_token_messages_by_tag, get_ao_token_tx, get_ao_token_txs, get_eoa_wallet_identity,
+    get_explorer_blocks, get_explorer_day_stats, get_explorer_recent_days,
     get_flp_own_minting_report_handler, get_flp_snapshot_handler, get_mainnet_block_messages,
     get_mainnet_explorer_blocks, get_mainnet_explorer_day_stats,
     get_mainnet_explorer_recent_days, get_mainnet_indexing_info, get_mainnet_messages_by_tag,
@@ -67,6 +68,9 @@ async fn main() {
         .route("/mainnet/messages/block/{height}", get(get_mainnet_block_messages))
         .route("/mainnet/messages/tags", get(get_mainnet_messages_by_tag))
         .route("/mainnet/info", get(get_mainnet_indexing_info))
+        .route("/token/ao/txs", get(get_ao_token_txs))
+        .route("/token/ao/txs/{msg_id}", get(get_ao_token_tx))
+        .route("/token/ao/txs/tags", get(get_ao_token_messages_by_tag))
         .layer(DefaultBodyLimit::max(REQ_SIZE_LIMIT))
         .layer(RequestBodyLimitLayer::new(REQ_SIZE_LIMIT))
         .layer(cors);
