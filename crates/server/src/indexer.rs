@@ -411,9 +411,7 @@ impl AtlasIndexerClient {
             .await?;
         let mut state_map = std::collections::HashMap::new();
         for row in state_rows {
-            state_map
-                .entry(row.protocol.clone())
-                .or_insert(row);
+            state_map.entry(row.protocol.clone()).or_insert(row);
         }
         Ok(message_rows
             .into_iter()
@@ -429,10 +427,7 @@ impl AtlasIndexerClient {
             .collect())
     }
 
-    pub async fn mainnet_explorer_blocks(
-        &self,
-        limit: u64,
-    ) -> Result<Vec<ExplorerBlock>, Error> {
+    pub async fn mainnet_explorer_blocks(&self, limit: u64) -> Result<Vec<ExplorerBlock>, Error> {
         let rows = self
             .client
             .query(
@@ -674,10 +669,7 @@ impl AtlasIndexerClient {
         Ok(rows.into_iter().map(|row| row.into()).collect())
     }
 
-    pub async fn ao_token_message_by_id(
-        &self,
-        msg_id: &str,
-    ) -> Result<Vec<AoTokenMessage>, Error> {
+    pub async fn ao_token_message_by_id(&self, msg_id: &str) -> Result<Vec<AoTokenMessage>, Error> {
         let sql = "\
             select \
                 m.source, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, \

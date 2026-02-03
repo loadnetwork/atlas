@@ -344,9 +344,7 @@ pub async fn get_ao_token_txs(
     Ok(Json(serde_json::to_value(&rows)?))
 }
 
-pub async fn get_ao_token_tx(
-    Path(msg_id): Path<String>,
-) -> Result<Json<Value>, ServerError> {
+pub async fn get_ao_token_tx(Path(msg_id): Path<String>) -> Result<Json<Value>, ServerError> {
     let client = AtlasIndexerClient::new().await?;
     let rows = client.ao_token_message_by_id(&msg_id).await?;
     Ok(Json(serde_json::to_value(&rows)?))
@@ -388,7 +386,9 @@ fn parse_protocol(value: Option<&String>) -> Result<Option<String>, ServerError>
             return Ok(None);
         }
         if normalized != "A" && normalized != "B" {
-            return Err(ServerError::from(anyhow!("invalid protocol (expected A or B)")));
+            return Err(ServerError::from(anyhow!(
+                "invalid protocol (expected A or B)"
+            )));
         }
         return Ok(Some(normalized));
     }
@@ -478,7 +478,11 @@ fn parse_human_amount_to_raw(input: &str) -> Result<String, ServerError> {
     if parts.next().is_some() {
         return Err(ServerError::from(anyhow!("invalid amount format")));
     }
-    let whole = if whole_part.is_empty() { "0" } else { whole_part };
+    let whole = if whole_part.is_empty() {
+        "0"
+    } else {
+        whole_part
+    };
     if !whole.chars().all(|c| c.is_ascii_digit()) {
         return Err(ServerError::from(anyhow!("invalid amount format")));
     }

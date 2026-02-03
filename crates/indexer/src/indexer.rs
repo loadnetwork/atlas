@@ -1,7 +1,9 @@
 use anyhow::Result;
 use chrono::Utc;
 use common::{
-    ao_token::{AoTokenMessageMeta, AoTokenMessagesPage, AoTokenQuery, scan_arweave_block_for_ao_token_msgs},
+    ao_token::{
+        AoTokenMessageMeta, AoTokenMessagesPage, AoTokenQuery, scan_arweave_block_for_ao_token_msgs,
+    },
     constants::{AO_TOKEN_START, DATA_PROTOCOL_A_START, DATA_PROTOCOL_B_START},
     delegation::{DelegationMappingMeta, DelegationMappingsPage, get_delegation_mappings},
     gateway::get_ar_balance,
@@ -134,7 +136,10 @@ impl Indexer {
         let clickhouse = self.clickhouse.clone();
         tokio::spawn(async move {
             if let Err(err) = run_ao_token_worker(clickhouse, AO_TOKEN_START).await {
-                eprintln!("ao token indexer error start={} err={err:?}", AO_TOKEN_START);
+                eprintln!(
+                    "ao token indexer error start={} err={err:?}",
+                    AO_TOKEN_START
+                );
             }
         });
         Ok(())
@@ -549,24 +554,23 @@ async fn run_ao_token_worker(clickhouse: Clickhouse, start: u32) -> Result<()> {
             }
         }
 
-        let transfer_count = match ingest_ao_token_query(
-            &clickhouse,
-            AoTokenQuery::Transfer,
-            height,
-            "transfer",
-        )
-        .await
-        {
-            Ok(count) => count,
-            Err(err) => {
-                if is_rate_limit_error(&err) || is_timeout_error(&err) {
-                    eprintln!("ao token transfer query error height={} err={err:?}", height);
-                    sleep(Duration::from_secs(300)).await;
-                    continue;
+        let transfer_count =
+            match ingest_ao_token_query(&clickhouse, AoTokenQuery::Transfer, height, "transfer")
+                .await
+            {
+                Ok(count) => count,
+                Err(err) => {
+                    if is_rate_limit_error(&err) || is_timeout_error(&err) {
+                        eprintln!(
+                            "ao token transfer query error height={} err={err:?}",
+                            height
+                        );
+                        sleep(Duration::from_secs(300)).await;
+                        continue;
+                    }
+                    return Err(err);
                 }
-                return Err(err);
-            }
-        };
+            };
         let process_count = match ingest_ao_token_query(
             &clickhouse,
             AoTokenQuery::Process,
