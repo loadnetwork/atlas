@@ -1,7 +1,8 @@
 use anyhow::Result;
 use chrono::Utc;
 use common::{
-    constants::{DATA_PROTOCOL_A_START, DATA_PROTOCOL_B_START},
+    ao_token::{AoTokenMessageMeta, AoTokenMessagesPage, AoTokenQuery, scan_arweave_block_for_ao_token_msgs},
+    constants::{AO_TOKEN_START, DATA_PROTOCOL_A_START, DATA_PROTOCOL_B_START},
     delegation::{DelegationMappingMeta, DelegationMappingsPage, get_delegation_mappings},
     gateway::get_ar_balance,
     gql::OracleStakers,
@@ -29,7 +30,8 @@ use crate::{
     backfill,
     backfill::run_mainnet_gap_worker,
     clickhouse::{
-        AtlasExplorerRow, Clickhouse, DelegationMappingRow, FlpPositionRow, MainnetBlockMetricRow,
+        AoTokenBlockStateRow, AoTokenMessageRow, AoTokenMessageTagRow, AtlasExplorerRow,
+        Clickhouse, DelegationMappingRow, FlpPositionRow, MainnetBlockMetricRow,
         MainnetBlockStateRow, MainnetExplorerRow, MainnetMessageRow, MainnetMessageTagRow,
         OracleSnapshotRow, WalletBalanceRow, WalletDelegationRow,
     },
@@ -54,6 +56,7 @@ impl Indexer {
         // self.reindex_mainnet_gap(1_821_500).await?;
         self.spawn_explorer_bridge().await?;
         self.spawn_mainnet_indexer().await?;
+        self.spawn_ao_token_indexer().await?;
         self.rebuild_mainnet_explorer().await?;
         self.spawn_mainnet_explorer_tail().await?;
         // self.spawn_backfill();
@@ -124,6 +127,16 @@ impl Indexer {
                 }
             });
         }
+        Ok(())
+    }
+
+    async fn spawn_ao_token_indexer(&self) -> Result<()> {
+        let clickhouse = self.clickhouse.clone();
+        tokio::spawn(async move {
+            if let Err(err) = run_ao_token_worker(clickhouse, AO_TOKEN_START).await {
+                eprintln!("ao token indexer error start={} err={err:?}", AO_TOKEN_START);
+            }
+        });
         Ok(())
     }
 
@@ -512,6 +525,59 @@ async fn run_mainnet_worker(
     }
 }
 
+async fn run_ao_token_worker(clickhouse: Clickhouse, start: u32) -> Result<()> {
+    let mut height = start;
+    if let Some(state) = clickhouse.fetch_ao_token_block_state().await? {
+        height = state.last_complete_height.max(start).saturating_add(1);
+    }
+    println!("ao token indexer starting at height {}", height);
+    let mut network_tip = fetch_network_height().await.unwrap_or(height as u64);
+    loop {
+        while height as u64 + ARWEAVE_TIP_SAFE_GAP > network_tip {
+            match fetch_network_height().await {
+                Ok(latest) => network_tip = latest,
+                Err(err) => {
+                    eprintln!("ao token tip fetch error err={err:?}");
+                }
+            }
+            if height as u64 + ARWEAVE_TIP_SAFE_GAP > network_tip {
+                println!(
+                    "ao token waiting, height {} exceeds tip {} with gap {ARWEAVE_TIP_SAFE_GAP}",
+                    height, network_tip
+                );
+                sleep(Duration::from_secs(60)).await;
+            }
+        }
+
+        let transfer_count = ingest_ao_token_query(
+            &clickhouse,
+            AoTokenQuery::Transfer,
+            height,
+            "transfer",
+        )
+        .await?;
+        let process_count = ingest_ao_token_query(
+            &clickhouse,
+            AoTokenQuery::Process,
+            height,
+            "process",
+        )
+        .await?;
+
+        let state_row = AoTokenBlockStateRow {
+            last_complete_height: height,
+            updated_at: Utc::now(),
+        };
+        clickhouse.insert_ao_token_block_state(&[state_row]).await?;
+        println!(
+            "ao token height {} stored {} transfers {} process msgs",
+            height, transfer_count, process_count
+        );
+        height = height.saturating_add(1);
+        sleep(Duration::from_secs(1)).await;
+    }
+}
+
 pub async fn fetch_mainnet_page(
     protocol: DataProtocol,
     height: u32,
@@ -519,6 +585,17 @@ pub async fn fetch_mainnet_page(
 ) -> Result<MainnetBlockMessagesPage> {
     Ok(tokio::task::spawn_blocking(move || {
         scan_arweave_block_for_msgs(protocol, height, cursor.as_deref())
+    })
+    .await??)
+}
+
+pub async fn fetch_ao_token_page(
+    query: AoTokenQuery,
+    height: u32,
+    cursor: Option<String>,
+) -> Result<AoTokenMessagesPage> {
+    Ok(tokio::task::spawn_blocking(move || {
+        scan_arweave_block_for_ao_token_msgs(query, height, cursor.as_deref())
     })
     .await??)
 }
@@ -542,6 +619,69 @@ pub fn is_empty_block_error(err: &anyhow::Error) -> bool {
 
 fn is_rate_limit_error(err: &anyhow::Error) -> bool {
     err.to_string().contains("http status: 429")
+}
+
+async fn ingest_ao_token_query(
+    clickhouse: &Clickhouse,
+    query: AoTokenQuery,
+    height: u32,
+    source: &str,
+) -> Result<usize> {
+    let mut cursor = None;
+    let mut total = 0usize;
+    loop {
+        let page = fetch_ao_token_page(query, height, cursor.clone()).await?;
+        let ts = Utc::now();
+        let mut message_rows = Vec::with_capacity(page.mappings.len());
+        let mut tag_rows = Vec::new();
+        for meta in page.mappings {
+            let AoTokenMessageMeta {
+                msg_id,
+                owner,
+                recipient,
+                block_height,
+                block_timestamp,
+                bundled_in,
+                data_size,
+                tags,
+            } = meta;
+            let msg_id_for_tags = msg_id.clone();
+            message_rows.push(AoTokenMessageRow {
+                ts,
+                source: source.to_string(),
+                block_height,
+                block_timestamp,
+                msg_id,
+                owner,
+                recipient,
+                bundled_in,
+                data_size,
+            });
+            for tag in tags {
+                tag_rows.push(AoTokenMessageTagRow {
+                    ts,
+                    source: source.to_string(),
+                    block_height,
+                    msg_id: msg_id_for_tags.clone(),
+                    tag_key: tag.key,
+                    tag_value: tag.value,
+                });
+            }
+        }
+        total += message_rows.len();
+        clickhouse.insert_ao_token_messages(&message_rows).await?;
+        clickhouse.insert_ao_token_message_tags(&tag_rows).await?;
+        if page.has_next_page {
+            if page.end_cursor.is_none() {
+                break;
+            }
+            cursor = page.end_cursor.clone();
+        } else {
+            break;
+        }
+        sleep(Duration::from_millis(200)).await;
+    }
+    Ok(total)
 }
 
 async fn run_mainnet_explorer_tail(clickhouse: Clickhouse) -> Result<()> {

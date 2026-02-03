@@ -8,6 +8,8 @@ pub const DAI_STAKING_ADDRESS: &str = "0x6a1b588b0684dace1f53c5820111f400b3dbfeb
 // ao protocol -- legacy
 pub const AO_AUTHORITY: &str = "fcoN_xJeisVsPXA-trzVAuIiqO3ydLQxM-L4XbrQKzY";
 pub const DELEGATION_PID: &str = "cuxSKjGJ-WDB9PzSkVkVVrIBSh3DrYHYz44usQOj5yE";
+pub const AO_TOKEN_PROCESS: &str = "0syT13r0s0tgPmIed95bJnuSqaD29HQNN8D3ElLSrsc";
+pub const AO_TOKEN_START: u32 = 1_606_012;
 // ao mainnet data protocols
 // the mainnet have 2 type of tags for mainnet txs,
 // type A follows lower-case tags key format

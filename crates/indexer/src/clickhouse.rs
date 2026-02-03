@@ -41,6 +41,9 @@ impl Clickhouse {
             "create table if not exists ao_mainnet_messages(ts DateTime64(3), protocol String, block_height UInt32, block_timestamp UInt64, msg_id String, owner String, recipient String, bundled_in String, data_size String) engine=ReplacingMergeTree order by (protocol, block_height, msg_id)",
             "create table if not exists ao_mainnet_message_tags(ts DateTime64(3), protocol String, block_height UInt32, msg_id String, tag_key String, tag_value String) engine=ReplacingMergeTree order by (tag_key, tag_value, block_height, msg_id)",
             "create table if not exists ao_mainnet_block_state(protocol String, last_complete_height UInt32, last_cursor String, updated_at DateTime64(3)) engine=ReplacingMergeTree order by protocol",
+            "create table if not exists ao_token_messages(ts DateTime64(3), source String, block_height UInt32, block_timestamp UInt64, msg_id String, owner String, recipient String, bundled_in String, data_size String) engine=ReplacingMergeTree order by (source, block_height, msg_id)",
+            "create table if not exists ao_token_message_tags(ts DateTime64(3), source String, block_height UInt32, msg_id String, tag_key String, tag_value String) engine=ReplacingMergeTree order by (source, tag_key, tag_value, block_height, msg_id)",
+            "create table if not exists ao_token_block_state(last_complete_height UInt32, updated_at DateTime64(3)) engine=ReplacingMergeTree order by updated_at",
         ];
         for stmt in stmts {
             self.client.query(stmt).execute().await?;
@@ -91,6 +94,18 @@ impl Clickhouse {
 
     pub async fn insert_mainnet_block_state(&self, rows: &[MainnetBlockStateRow]) -> Result<()> {
         self.insert_rows("ao_mainnet_block_state", rows).await
+    }
+
+    pub async fn insert_ao_token_messages(&self, rows: &[AoTokenMessageRow]) -> Result<()> {
+        self.insert_rows("ao_token_messages", rows).await
+    }
+
+    pub async fn insert_ao_token_message_tags(&self, rows: &[AoTokenMessageTagRow]) -> Result<()> {
+        self.insert_rows("ao_token_message_tags", rows).await
+    }
+
+    pub async fn insert_ao_token_block_state(&self, rows: &[AoTokenBlockStateRow]) -> Result<()> {
+        self.insert_rows("ao_token_block_state", rows).await
     }
 
     pub async fn truncate_mainnet_explorer(&self) -> Result<()> {
@@ -170,6 +185,20 @@ impl Clickhouse {
             )
             .bind(protocol)
             .fetch_all::<MainnetBlockStateRow>()
+            .await?;
+        Ok(rows.into_iter().next())
+    }
+
+    pub async fn fetch_ao_token_block_state(&self) -> Result<Option<AoTokenBlockStateRow>> {
+        let rows = self
+            .client
+            .query(
+                "select last_complete_height, updated_at \
+                 from ao_token_block_state \
+                 order by updated_at desc \
+                 limit 1",
+            )
+            .fetch_all::<AoTokenBlockStateRow>()
             .await?;
         Ok(rows.into_iter().next())
     }
@@ -321,6 +350,38 @@ pub struct MainnetMessageTagRow {
     pub msg_id: String,
     pub tag_key: String,
     pub tag_value: String,
+}
+
+#[derive(Clone, Debug, Row, Serialize)]
+pub struct AoTokenMessageRow {
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    pub ts: DateTime<Utc>,
+    pub source: String,
+    pub block_height: u32,
+    pub block_timestamp: u64,
+    pub msg_id: String,
+    pub owner: String,
+    pub recipient: String,
+    pub bundled_in: String,
+    pub data_size: String,
+}
+
+#[derive(Clone, Debug, Row, Serialize)]
+pub struct AoTokenMessageTagRow {
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    pub ts: DateTime<Utc>,
+    pub source: String,
+    pub block_height: u32,
+    pub msg_id: String,
+    pub tag_key: String,
+    pub tag_value: String,
+}
+
+#[derive(Clone, Debug, Row, Serialize, Deserialize)]
+pub struct AoTokenBlockStateRow {
+    pub last_complete_height: u32,
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Clone, Debug, Row, Serialize, Deserialize)]
