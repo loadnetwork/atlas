@@ -549,20 +549,42 @@ async fn run_ao_token_worker(clickhouse: Clickhouse, start: u32) -> Result<()> {
             }
         }
 
-        let transfer_count = ingest_ao_token_query(
+        let transfer_count = match ingest_ao_token_query(
             &clickhouse,
             AoTokenQuery::Transfer,
             height,
             "transfer",
         )
-        .await?;
-        let process_count = ingest_ao_token_query(
+        .await
+        {
+            Ok(count) => count,
+            Err(err) => {
+                if is_rate_limit_error(&err) || is_timeout_error(&err) {
+                    eprintln!("ao token transfer query error height={} err={err:?}", height);
+                    sleep(Duration::from_secs(300)).await;
+                    continue;
+                }
+                return Err(err);
+            }
+        };
+        let process_count = match ingest_ao_token_query(
             &clickhouse,
             AoTokenQuery::Process,
             height,
             "process",
         )
-        .await?;
+        .await
+        {
+            Ok(count) => count,
+            Err(err) => {
+                if is_rate_limit_error(&err) || is_timeout_error(&err) {
+                    eprintln!("ao token process query error height={} err={err:?}", height);
+                    sleep(Duration::from_secs(300)).await;
+                    continue;
+                }
+                return Err(err);
+            }
+        };
 
         let state_row = AoTokenBlockStateRow {
             last_complete_height: height,
@@ -619,6 +641,11 @@ pub fn is_empty_block_error(err: &anyhow::Error) -> bool {
 
 fn is_rate_limit_error(err: &anyhow::Error) -> bool {
     err.to_string().contains("http status: 429")
+}
+
+fn is_timeout_error(err: &anyhow::Error) -> bool {
+    let msg = err.to_string().to_ascii_lowercase();
+    msg.contains("timeout") || msg.contains("timed out")
 }
 
 async fn ingest_ao_token_query(
