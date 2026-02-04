@@ -403,6 +403,19 @@ pub async fn get_ao_token_frequency(
     Ok(Json(serde_json::to_value(&info)?))
 }
 
+pub async fn get_ao_token_richlist(
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, ServerError> {
+    let limit = params
+        .get("limit")
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(25);
+    let client = AtlasIndexerClient::new().await?;
+    let info = client.ao_token_richlist(limit).await?;
+    Ok(Json(serde_json::to_value(&info)?))
+}
+
 fn parse_protocol(value: Option<&String>) -> Result<Option<String>, ServerError> {
     if let Some(p) = value {
         let normalized = p.trim().to_ascii_uppercase();
