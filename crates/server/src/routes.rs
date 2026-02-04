@@ -379,6 +379,12 @@ pub async fn get_ao_token_messages_by_tag(
     Ok(Json(serde_json::to_value(&rows)?))
 }
 
+pub async fn get_ao_token_indexing_info() -> Result<Json<Value>, ServerError> {
+    let client = AtlasIndexerClient::new().await?;
+    let info = client.ao_token_indexing_info().await?;
+    Ok(Json(serde_json::to_value(&info)?))
+}
+
 fn parse_protocol(value: Option<&String>) -> Result<Option<String>, ServerError> {
     if let Some(p) = value {
         let normalized = p.trim().to_ascii_uppercase();

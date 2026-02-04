@@ -2,8 +2,9 @@ use anyhow::{Error, anyhow};
 use chrono::{DateTime, NaiveDate, Utc};
 use clickhouse::Row;
 use common::{
-    constants::{DATA_PROTOCOL_A_START, DATA_PROTOCOL_B_START},
+    constants::{AO_TOKEN_START, DATA_PROTOCOL_A_START, DATA_PROTOCOL_B_START},
     env::get_env_var,
+    mainnet::get_network_height,
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -544,6 +545,73 @@ impl AtlasIndexerClient {
                 })
             })
             .collect())
+    }
+
+    pub async fn ao_token_indexing_info(&self) -> Result<AoTokenIndexingInfo, Error> {
+        let stats = self
+            .client
+            .query(
+                "select \
+                    count() as total_messages, \
+                    countIf(source = 'transfer') as transfer_messages, \
+                    countIf(source = 'process') as process_messages, \
+                    ifNull(max(block_height), 0) as max_block_height, \
+                    ifNull(max(ts), toDateTime64(0, 3)) as latest_indexed_at \
+                 from ao_token_messages",
+            )
+            .fetch_all::<AoTokenStatsRow>()
+            .await?
+            .into_iter()
+            .next()
+            .unwrap_or_default();
+        let state = self
+            .client
+            .query(
+                "select last_complete_height, updated_at \
+                 from ao_token_block_state \
+                 order by updated_at desc \
+                 limit 1",
+            )
+            .fetch_all::<AoTokenStateRow>()
+            .await?
+            .into_iter()
+            .next();
+        let arweave_tip = tokio::task::spawn_blocking(get_network_height)
+            .await
+            .ok()
+            .and_then(|res| res.ok());
+        let (last_processed_height, last_processed_at) = match state {
+            Some(row) => (Some(row.last_complete_height), Some(row.updated_at)),
+            None => (None, None),
+        };
+        let block_lag = match (arweave_tip, last_processed_height) {
+            (Some(tip), Some(processed)) if tip >= processed as u64 => {
+                Some(tip - processed as u64)
+            }
+            _ => None,
+        };
+        let max_block_height = if stats.max_block_height == 0 {
+            None
+        } else {
+            Some(stats.max_block_height)
+        };
+        let latest_indexed_at = if stats.latest_indexed_at.timestamp() == 0 {
+            None
+        } else {
+            Some(stats.latest_indexed_at)
+        };
+        Ok(AoTokenIndexingInfo {
+            start_height: AO_TOKEN_START,
+            arweave_tip,
+            last_processed_height,
+            last_processed_at,
+            max_block_height,
+            latest_indexed_at,
+            total_messages: stats.total_messages,
+            transfer_messages: stats.transfer_messages,
+            process_messages: stats.process_messages,
+            block_lag,
+        })
     }
 
     pub async fn ao_token_messages(
@@ -1238,6 +1306,39 @@ struct MainnetProgressRow {
     block_height: u32,
     #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
     indexed_at: DateTime<Utc>,
+}
+
+#[derive(Row, serde::Deserialize, Default)]
+struct AoTokenStatsRow {
+    total_messages: u64,
+    transfer_messages: u64,
+    process_messages: u64,
+    max_block_height: u32,
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    latest_indexed_at: DateTime<Utc>,
+}
+
+#[derive(Row, serde::Deserialize)]
+struct AoTokenStateRow {
+    last_complete_height: u32,
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    updated_at: DateTime<Utc>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct AoTokenIndexingInfo {
+    pub start_height: u32,
+    pub arweave_tip: Option<u64>,
+    pub last_processed_height: Option<u32>,
+    #[serde(with = "chrono::serde::ts_milliseconds_option")]
+    pub last_processed_at: Option<DateTime<Utc>>,
+    pub max_block_height: Option<u32>,
+    #[serde(with = "chrono::serde::ts_milliseconds_option")]
+    pub latest_indexed_at: Option<DateTime<Utc>>,
+    pub total_messages: u64,
+    pub transfer_messages: u64,
+    pub process_messages: u64,
+    pub block_lag: Option<u64>,
 }
 
 impl From<MainnetProgressRow> for MainnetProtocolInfo {
