@@ -585,9 +585,7 @@ impl AtlasIndexerClient {
             None => (None, None),
         };
         let block_lag = match (arweave_tip, last_processed_height) {
-            (Some(tip), Some(processed)) if tip >= processed as u64 => {
-                Some(tip - processed as u64)
-            }
+            (Some(tip), Some(processed)) if tip >= processed as u64 => Some(tip - processed as u64),
             _ => None,
         };
         let max_block_height = if stats.max_block_height == 0 {
@@ -611,6 +609,143 @@ impl AtlasIndexerClient {
             transfer_messages: stats.transfer_messages,
             process_messages: stats.process_messages,
             block_lag,
+        })
+    }
+
+    pub async fn ao_token_frequency(&self, limit: u64) -> Result<AoTokenFrequencyInfo, Error> {
+        let source_clause = "";
+        let action_sql = format!(
+            "select tag_value, count() as cnt \
+             from ao_token_message_tags \
+             where tag_key = 'Action'{} \
+             group by tag_value \
+             order by cnt desc",
+            source_clause
+        );
+        let sender_sql = format!(
+            "select tag_value, count() as cnt \
+             from ao_token_message_tags \
+             where tag_key = 'Sender'{} \
+             group by tag_value \
+             order by cnt desc \
+             limit ?",
+            source_clause
+        );
+        let recipient_sql = format!(
+            "select tag_value, count() as cnt \
+             from ao_token_message_tags \
+             where tag_key = 'Recipient'{} \
+             group by tag_value \
+             order by cnt desc \
+             limit ?",
+            source_clause
+        );
+
+        let action_rows = self
+            .client
+            .query(&action_sql)
+            .fetch_all::<AoTokenTagCountRow>()
+            .await?;
+        let sender_rows = self
+            .client
+            .query(&sender_sql)
+            .bind(limit)
+            .fetch_all::<AoTokenTagCountRow>()
+            .await?;
+        let recipient_rows = self
+            .client
+            .query(&recipient_sql)
+            .bind(limit)
+            .fetch_all::<AoTokenTagCountRow>()
+            .await?;
+
+        Ok(AoTokenFrequencyInfo {
+            actions: action_rows
+                .into_iter()
+                .map(|row| AoTokenActionCount {
+                    action: row.tag_value,
+                    count: row.cnt,
+                })
+                .collect(),
+            top_senders: sender_rows
+                .into_iter()
+                .map(|row| AoTokenTagCount {
+                    value: row.tag_value,
+                    count: row.cnt,
+                })
+                .collect(),
+            top_recipients: recipient_rows
+                .into_iter()
+                .map(|row| AoTokenTagCount {
+                    value: row.tag_value,
+                    count: row.cnt,
+                })
+                .collect(),
+        })
+    }
+
+    pub async fn ao_token_richlist(&self, limit: u64) -> Result<AoTokenRichlist, Error> {
+        let top_spenders_sql = "\
+            select sender.tag_value as address, \
+                   sum(toUInt128OrZero(qty.tag_value)) as total_quantity \
+            from ao_token_message_tags sender \
+            inner join ao_token_message_tags qty \
+              on qty.source = sender.source and qty.block_height = sender.block_height \
+             and qty.msg_id = sender.msg_id \
+            inner join ao_token_message_tags action \
+              on action.source = sender.source and action.block_height = sender.block_height \
+             and action.msg_id = sender.msg_id \
+            where sender.tag_key = 'Sender' \
+              and qty.tag_key = 'Quantity' \
+              and action.tag_key = 'Action' \
+              and action.tag_value = 'Credit-Notice' \
+            group by sender.tag_value \
+            order by total_quantity desc \
+            limit ?";
+        let top_receivers_sql = "\
+            select recipient.tag_value as address, \
+                   sum(toUInt128OrZero(qty.tag_value)) as total_quantity \
+            from ao_token_message_tags recipient \
+            inner join ao_token_message_tags qty \
+              on qty.source = recipient.source and qty.block_height = recipient.block_height \
+             and qty.msg_id = recipient.msg_id \
+            inner join ao_token_message_tags action \
+              on action.source = recipient.source and action.block_height = recipient.block_height \
+             and action.msg_id = recipient.msg_id \
+            where recipient.tag_key = 'Recipient' \
+              and qty.tag_key = 'Quantity' \
+              and action.tag_key = 'Action' \
+              and action.tag_value = 'Debit-Notice' \
+            group by recipient.tag_value \
+            order by total_quantity desc \
+            limit ?";
+        let spenders = self
+            .client
+            .query(top_spenders_sql)
+            .bind(limit)
+            .fetch_all::<AoTokenSumRow>()
+            .await?;
+        let receivers = self
+            .client
+            .query(top_receivers_sql)
+            .bind(limit)
+            .fetch_all::<AoTokenSumRow>()
+            .await?;
+        Ok(AoTokenRichlist {
+            top_spenders: spenders
+                .into_iter()
+                .map(|row| AoTokenQuantityRank {
+                    address: row.address,
+                    total_quantity: format_quantity_human(row.total_quantity),
+                })
+                .collect(),
+            top_receivers: receivers
+                .into_iter()
+                .map(|row| AoTokenQuantityRank {
+                    address: row.address,
+                    total_quantity: format_quantity_human(row.total_quantity),
+                })
+                .collect(),
         })
     }
 
@@ -1344,6 +1479,63 @@ pub struct AoTokenIndexingInfo {
     pub transfer_messages: u64,
     pub process_messages: u64,
     pub block_lag: Option<u64>,
+}
+
+#[derive(Row, serde::Deserialize)]
+struct AoTokenTagCountRow {
+    tag_value: String,
+    cnt: u64,
+}
+
+#[derive(Serialize, Clone)]
+pub struct AoTokenActionCount {
+    pub action: String,
+    pub count: u64,
+}
+
+#[derive(Serialize, Clone)]
+pub struct AoTokenTagCount {
+    pub value: String,
+    pub count: u64,
+}
+
+#[derive(Serialize, Clone)]
+pub struct AoTokenFrequencyInfo {
+    pub actions: Vec<AoTokenActionCount>,
+    pub top_senders: Vec<AoTokenTagCount>,
+    pub top_recipients: Vec<AoTokenTagCount>,
+}
+
+#[derive(Row, serde::Deserialize)]
+struct AoTokenSumRow {
+    address: String,
+    total_quantity: u128,
+}
+
+#[derive(Serialize, Clone)]
+pub struct AoTokenQuantityRank {
+    pub address: String,
+    pub total_quantity: String,
+}
+
+#[derive(Serialize, Clone)]
+pub struct AoTokenRichlist {
+    pub top_spenders: Vec<AoTokenQuantityRank>,
+    pub top_receivers: Vec<AoTokenQuantityRank>,
+}
+
+fn format_quantity_human(value: u128) -> String {
+    let scale: u128 = 1_000_000_000_000;
+    let whole = value / scale;
+    let frac = value % scale;
+    if frac == 0 {
+        return whole.to_string();
+    }
+    let mut frac_str = format!("{:012}", frac);
+    while frac_str.ends_with('0') {
+        frac_str.pop();
+    }
+    format!("{}.{}", whole, frac_str)
 }
 
 impl From<MainnetProgressRow> for MainnetProtocolInfo {

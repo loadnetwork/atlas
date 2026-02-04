@@ -56,6 +56,8 @@ AO token messages (ao.TN.1):
 - `GET /token/ao/txs?order=asc|desc` - list AO token messages (indexed) - ordering by blockheight.
 - `GET /token/ao/txs/{msg_id}` - message by id (includes tags).
 - `GET /token/ao/txs/tags?key=<TAG_NAME>&value=<TAG_VALUE>&source=<transfer|process>&limit=<N>` - filter AO token messages by tag.
+- `GET /token/ao/top/frequency?limit=<N>` - counts per Action + top Sender/Recipient frequencies.
+- `GET /token/ao/top/richlist?limit=<N>` - top spenders/receivers by Quantity (12 decimals)
 
 > ***AO token N.B***
 > amount filters use human units (12 decimals) and are applied against the `Quantity` tag.
