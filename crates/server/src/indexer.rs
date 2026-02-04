@@ -614,6 +614,81 @@ impl AtlasIndexerClient {
         })
     }
 
+    pub async fn ao_token_frequency(
+        &self,
+        limit: u64,
+    ) -> Result<AoTokenFrequencyInfo, Error> {
+        let source_clause = "";
+        let action_sql = format!(
+            "select tag_value, count() as cnt \
+             from ao_token_message_tags \
+             where tag_key = 'Action'{} \
+             group by tag_value \
+             order by cnt desc",
+            source_clause
+        );
+        let sender_sql = format!(
+            "select tag_value, count() as cnt \
+             from ao_token_message_tags \
+             where tag_key = 'Sender'{} \
+             group by tag_value \
+             order by cnt desc \
+             limit ?",
+            source_clause
+        );
+        let recipient_sql = format!(
+            "select tag_value, count() as cnt \
+             from ao_token_message_tags \
+             where tag_key = 'Recipient'{} \
+             group by tag_value \
+             order by cnt desc \
+             limit ?",
+            source_clause
+        );
+
+        let action_rows = self
+            .client
+            .query(&action_sql)
+            .fetch_all::<AoTokenTagCountRow>()
+            .await?;
+        let sender_rows = self
+            .client
+            .query(&sender_sql)
+            .bind(limit)
+            .fetch_all::<AoTokenTagCountRow>()
+            .await?;
+        let recipient_rows = self
+            .client
+            .query(&recipient_sql)
+            .bind(limit)
+            .fetch_all::<AoTokenTagCountRow>()
+            .await?;
+
+        Ok(AoTokenFrequencyInfo {
+            actions: action_rows
+                .into_iter()
+                .map(|row| AoTokenActionCount {
+                    action: row.tag_value,
+                    count: row.cnt,
+                })
+                .collect(),
+            top_senders: sender_rows
+                .into_iter()
+                .map(|row| AoTokenTagCount {
+                    value: row.tag_value,
+                    count: row.cnt,
+                })
+                .collect(),
+            top_recipients: recipient_rows
+                .into_iter()
+                .map(|row| AoTokenTagCount {
+                    value: row.tag_value,
+                    count: row.cnt,
+                })
+                .collect(),
+        })
+    }
+
     pub async fn ao_token_messages(
         &self,
         source: Option<&str>,
@@ -1344,6 +1419,31 @@ pub struct AoTokenIndexingInfo {
     pub transfer_messages: u64,
     pub process_messages: u64,
     pub block_lag: Option<u64>,
+}
+
+#[derive(Row, serde::Deserialize)]
+struct AoTokenTagCountRow {
+    tag_value: String,
+    cnt: u64,
+}
+
+#[derive(Serialize, Clone)]
+pub struct AoTokenActionCount {
+    pub action: String,
+    pub count: u64,
+}
+
+#[derive(Serialize, Clone)]
+pub struct AoTokenTagCount {
+    pub value: String,
+    pub count: u64,
+}
+
+#[derive(Serialize, Clone)]
+pub struct AoTokenFrequencyInfo {
+    pub actions: Vec<AoTokenActionCount>,
+    pub top_senders: Vec<AoTokenTagCount>,
+    pub top_recipients: Vec<AoTokenTagCount>,
 }
 
 impl From<MainnetProgressRow> for MainnetProtocolInfo {
