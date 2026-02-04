@@ -585,9 +585,7 @@ impl AtlasIndexerClient {
             None => (None, None),
         };
         let block_lag = match (arweave_tip, last_processed_height) {
-            (Some(tip), Some(processed)) if tip >= processed as u64 => {
-                Some(tip - processed as u64)
-            }
+            (Some(tip), Some(processed)) if tip >= processed as u64 => Some(tip - processed as u64),
             _ => None,
         };
         let max_block_height = if stats.max_block_height == 0 {
@@ -614,10 +612,7 @@ impl AtlasIndexerClient {
         })
     }
 
-    pub async fn ao_token_frequency(
-        &self,
-        limit: u64,
-    ) -> Result<AoTokenFrequencyInfo, Error> {
+    pub async fn ao_token_frequency(&self, limit: u64) -> Result<AoTokenFrequencyInfo, Error> {
         let source_clause = "";
         let action_sql = format!(
             "select tag_value, count() as cnt \
