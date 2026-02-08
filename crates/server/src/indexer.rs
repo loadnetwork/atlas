@@ -2,7 +2,7 @@ use anyhow::{Error, anyhow};
 use chrono::{DateTime, NaiveDate, Utc};
 use clickhouse::Row;
 use common::{
-    constants::{AO_TOKEN_START, DATA_PROTOCOL_A_START, DATA_PROTOCOL_B_START},
+    constants::{AO_TOKEN_START, DATA_PROTOCOL_A_START, DATA_PROTOCOL_B_START, PI_TOKEN_START},
     env::get_env_var,
     mainnet::get_network_height,
 };
@@ -543,7 +543,10 @@ impl AtlasIndexerClient {
             .collect())
     }
 
-    pub async fn ao_token_indexing_info(&self) -> Result<AoTokenIndexingInfo, Error> {
+    pub async fn ao_token_indexing_info(
+        &self,
+        token: &str,
+    ) -> Result<AoTokenIndexingInfo, Error> {
         let stats = self
             .client
             .query(
@@ -553,8 +556,10 @@ impl AtlasIndexerClient {
                     countIf(source = 'process') as process_messages, \
                     ifNull(max(block_height), 0) as max_block_height, \
                     ifNull(max(ts), toDateTime64(0, 3)) as latest_indexed_at \
-                 from ao_token_messages",
+                 from ao_token_messages \
+                 where token = ?",
             )
+            .bind(token)
             .fetch_all::<AoTokenStatsRow>()
             .await?
             .into_iter()
@@ -563,11 +568,14 @@ impl AtlasIndexerClient {
         let state = self
             .client
             .query(
-                "select last_complete_height, updated_at \
-                 from ao_token_block_state \
-                 order by updated_at desc \
-                 limit 1",
+                "select token, \
+                    argMax(last_complete_height, s.updated_at) as last_complete_height, \
+                    max(s.updated_at) as updated_at \
+                 from ao_token_block_state as s \
+                 where token = ? \
+                 group by token",
             )
+            .bind(token)
             .fetch_all::<AoTokenStateRow>()
             .await?
             .into_iter()
@@ -595,7 +603,7 @@ impl AtlasIndexerClient {
             Some(stats.latest_indexed_at)
         };
         Ok(AoTokenIndexingInfo {
-            start_height: AO_TOKEN_START,
+            start_height: token_start(token),
             arweave_tip,
             last_processed_height,
             last_processed_at,
@@ -608,46 +616,49 @@ impl AtlasIndexerClient {
         })
     }
 
-    pub async fn ao_token_frequency(&self, limit: u64) -> Result<AoTokenFrequencyInfo, Error> {
-        let source_clause = "";
-        let action_sql = format!(
+    pub async fn ao_token_frequency(
+        &self,
+        token: &str,
+        limit: u64,
+    ) -> Result<AoTokenFrequencyInfo, Error> {
+        let action_sql =
             "select tag_value, count() as cnt \
              from ao_token_message_tags \
-             where tag_key = 'Action'{source_clause} \
+             where token = ? and tag_key = 'Action' \
              group by tag_value \
-             order by cnt desc"
-        );
-        let sender_sql = format!(
+             order by cnt desc";
+        let sender_sql =
             "select tag_value, count() as cnt \
              from ao_token_message_tags \
-             where tag_key = 'Sender'{source_clause} \
-             group by tag_value \
-             order by cnt desc \
-             limit ?"
-        );
-        let recipient_sql = format!(
-            "select tag_value, count() as cnt \
-             from ao_token_message_tags \
-             where tag_key = 'Recipient'{source_clause} \
+             where token = ? and tag_key = 'Sender' \
              group by tag_value \
              order by cnt desc \
-             limit ?"
-        );
+             limit ?";
+        let recipient_sql =
+            "select tag_value, count() as cnt \
+             from ao_token_message_tags \
+             where token = ? and tag_key = 'Recipient' \
+             group by tag_value \
+             order by cnt desc \
+             limit ?";
 
         let action_rows = self
             .client
-            .query(&action_sql)
+            .query(action_sql)
+            .bind(token)
             .fetch_all::<AoTokenTagCountRow>()
             .await?;
         let sender_rows = self
             .client
-            .query(&sender_sql)
+            .query(sender_sql)
+            .bind(token)
             .bind(limit)
             .fetch_all::<AoTokenTagCountRow>()
             .await?;
         let recipient_rows = self
             .client
-            .query(&recipient_sql)
+            .query(recipient_sql)
+            .bind(token)
             .bind(limit)
             .fetch_all::<AoTokenTagCountRow>()
             .await?;
@@ -677,18 +688,23 @@ impl AtlasIndexerClient {
         })
     }
 
-    pub async fn ao_token_richlist(&self, limit: u64) -> Result<AoTokenRichlist, Error> {
+    pub async fn ao_token_richlist(
+        &self,
+        token: &str,
+        limit: u64,
+    ) -> Result<AoTokenRichlist, Error> {
         let top_spenders_sql = "\
             select sender.tag_value as address, \
                    sum(toUInt128OrZero(qty.tag_value)) as total_quantity \
             from ao_token_message_tags sender \
             inner join ao_token_message_tags qty \
-              on qty.source = sender.source and qty.block_height = sender.block_height \
+              on qty.token = sender.token and qty.source = sender.source and qty.block_height = sender.block_height \
              and qty.msg_id = sender.msg_id \
             inner join ao_token_message_tags action \
-              on action.source = sender.source and action.block_height = sender.block_height \
+              on action.token = sender.token and action.source = sender.source and action.block_height = sender.block_height \
              and action.msg_id = sender.msg_id \
-            where sender.tag_key = 'Sender' \
+            where sender.token = ? \
+              and sender.tag_key = 'Sender' \
               and qty.tag_key = 'Quantity' \
               and action.tag_key = 'Action' \
               and action.tag_value = 'Credit-Notice' \
@@ -700,12 +716,13 @@ impl AtlasIndexerClient {
                    sum(toUInt128OrZero(qty.tag_value)) as total_quantity \
             from ao_token_message_tags recipient \
             inner join ao_token_message_tags qty \
-              on qty.source = recipient.source and qty.block_height = recipient.block_height \
+              on qty.token = recipient.token and qty.source = recipient.source and qty.block_height = recipient.block_height \
              and qty.msg_id = recipient.msg_id \
             inner join ao_token_message_tags action \
-              on action.source = recipient.source and action.block_height = recipient.block_height \
+              on action.token = recipient.token and action.source = recipient.source and action.block_height = recipient.block_height \
              and action.msg_id = recipient.msg_id \
-            where recipient.tag_key = 'Recipient' \
+            where recipient.token = ? \
+              and recipient.tag_key = 'Recipient' \
               and qty.tag_key = 'Quantity' \
               and action.tag_key = 'Action' \
               and action.tag_value = 'Debit-Notice' \
@@ -715,12 +732,14 @@ impl AtlasIndexerClient {
         let spenders = self
             .client
             .query(top_spenders_sql)
+            .bind(token)
             .bind(limit)
             .fetch_all::<AoTokenSumRow>()
             .await?;
         let receivers = self
             .client
             .query(top_receivers_sql)
+            .bind(token)
             .bind(limit)
             .fetch_all::<AoTokenSumRow>()
             .await?;
@@ -744,6 +763,7 @@ impl AtlasIndexerClient {
 
     pub async fn ao_token_messages(
         &self,
+        token: &str,
         source: Option<&str>,
         action: Option<&str>,
         min_qty: Option<&str>,
@@ -760,73 +780,77 @@ impl AtlasIndexerClient {
     ) -> Result<Vec<AoTokenMessage>, Error> {
         let mut joins = Vec::new();
         let mut where_clauses = Vec::new();
-        let mut binds: Vec<BindValue> = Vec::new();
+        let mut join_binds: Vec<BindValue> = Vec::new();
+        let mut where_binds: Vec<BindValue> = Vec::new();
+
+        where_clauses.push("m.token = ?");
+        where_binds.push(BindValue::Str(token.to_string()));
 
         if let Some(val) = action {
             joins.push(
                 "inner join ao_token_message_tags action_filter \
-                 on action_filter.source = m.source and action_filter.block_height = m.block_height \
+                 on action_filter.token = m.token and action_filter.source = m.source and action_filter.block_height = m.block_height \
                  and action_filter.msg_id = m.msg_id and action_filter.tag_key = 'Action' \
                  and lowerUTF8(action_filter.tag_value) = lowerUTF8(?)"
                     .to_string(),
             );
-            binds.push(BindValue::Str(val.to_string()));
+            join_binds.push(BindValue::Str(val.to_string()));
         }
         if let Some(val) = recipient {
             joins.push(
                 "inner join ao_token_message_tags recipient_filter \
-                 on recipient_filter.source = m.source and recipient_filter.block_height = m.block_height \
+                 on recipient_filter.token = m.token and recipient_filter.source = m.source and recipient_filter.block_height = m.block_height \
                  and recipient_filter.msg_id = m.msg_id and recipient_filter.tag_key = 'Recipient' \
                  and recipient_filter.tag_value = ?"
                     .to_string(),
             );
-            binds.push(BindValue::Str(val.to_string()));
+            join_binds.push(BindValue::Str(val.to_string()));
         }
         if let Some(val) = sender {
             joins.push(
                 "inner join ao_token_message_tags sender_filter \
-                 on sender_filter.source = m.source and sender_filter.block_height = m.block_height \
+                 on sender_filter.token = m.token and sender_filter.source = m.source and sender_filter.block_height = m.block_height \
                  and sender_filter.msg_id = m.msg_id and sender_filter.tag_key = 'Sender' \
                  and sender_filter.tag_value = ?"
                     .to_string(),
             );
-            binds.push(BindValue::Str(val.to_string()));
+            join_binds.push(BindValue::Str(val.to_string()));
         }
         if min_qty.is_some() || max_qty.is_some() {
             joins.push(
                 "inner join ao_token_message_tags qty_filter \
-                 on qty_filter.source = m.source and qty_filter.block_height = m.block_height \
+                 on qty_filter.token = m.token and qty_filter.source = m.source and qty_filter.block_height = m.block_height \
                  and qty_filter.msg_id = m.msg_id and qty_filter.tag_key = 'Quantity'"
                     .to_string(),
             );
         }
         if let Some(val) = min_qty {
             where_clauses.push("toUInt128OrZero(qty_filter.tag_value) >= toUInt128OrZero(?)");
-            binds.push(BindValue::Str(val.to_string()));
+            where_binds.push(BindValue::Str(val.to_string()));
         }
         if let Some(val) = max_qty {
             where_clauses.push("toUInt128OrZero(qty_filter.tag_value) <= toUInt128OrZero(?)");
-            binds.push(BindValue::Str(val.to_string()));
+            where_binds.push(BindValue::Str(val.to_string()));
         }
         if let Some(val) = source {
             where_clauses.push("m.source = ?");
-            binds.push(BindValue::Str(val.to_string()));
+            where_binds.push(BindValue::Str(val.to_string()));
         }
         if let Some(val) = from_ts {
             where_clauses.push("m.block_timestamp >= ?");
-            binds.push(BindValue::U64(val));
+            where_binds.push(BindValue::U64(val));
         }
         if let Some(val) = to_ts {
             where_clauses.push("m.block_timestamp <= ?");
-            binds.push(BindValue::U64(val));
+            where_binds.push(BindValue::U64(val));
         }
         if let Some(val) = block_min {
             where_clauses.push("m.block_height >= ?");
-            binds.push(BindValue::U32(val));
+            where_binds.push(BindValue::U32(val));
         }
         if let Some(val) = block_max {
             where_clauses.push("m.block_height <= ?");
-            binds.push(BindValue::U32(val));
+            where_binds.push(BindValue::U32(val));
         }
 
         let join_clause = if joins.is_empty() {
@@ -850,7 +874,7 @@ impl AtlasIndexerClient {
                 arrayFilter(x -> x.1 != '', groupArray(tuple(ifNull(t.tag_key, ''), ifNull(t.tag_value, '')))) as tags \
              from ao_token_messages m \
              left join ao_token_message_tags t \
-               on t.source = m.source and t.block_height = m.block_height and t.msg_id = m.msg_id \
+               on t.token = m.token and t.source = m.source and t.block_height = m.block_height and t.msg_id = m.msg_id \
              {join_clause} \
              {where_clause} \
              group by m.source, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, m.bundled_in, m.data_size, m.ts \
@@ -858,7 +882,7 @@ impl AtlasIndexerClient {
              limit ? offset ?"
         );
         let mut query = self.client.query(&sql);
-        for bind in binds {
+        for bind in join_binds.into_iter().chain(where_binds.into_iter()) {
             query = bind.apply(query);
         }
         let rows = query
@@ -869,7 +893,11 @@ impl AtlasIndexerClient {
         Ok(rows.into_iter().map(|row| row.into()).collect())
     }
 
-    pub async fn ao_token_message_by_id(&self, msg_id: &str) -> Result<Vec<AoTokenMessage>, Error> {
+    pub async fn ao_token_message_by_id(
+        &self,
+        token: &str,
+        msg_id: &str,
+    ) -> Result<Vec<AoTokenMessage>, Error> {
         let sql = "\
             select \
                 m.source, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, \
@@ -877,13 +905,14 @@ impl AtlasIndexerClient {
                 arrayFilter(x -> x.1 != '', groupArray(tuple(ifNull(t.tag_key, ''), ifNull(t.tag_value, '')))) as tags \
              from ao_token_messages m \
              left join ao_token_message_tags t \
-               on t.source = m.source and t.block_height = m.block_height and t.msg_id = m.msg_id \
-             where m.msg_id = ? \
+               on t.token = m.token and t.source = m.source and t.block_height = m.block_height and t.msg_id = m.msg_id \
+             where m.token = ? and m.msg_id = ? \
              group by m.source, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, m.bundled_in, m.data_size, m.ts \
              order by m.block_height desc, m.msg_id desc";
         let rows = self
             .client
             .query(sql)
+            .bind(token)
             .bind(msg_id)
             .fetch_all::<AoTokenMessageRow>()
             .await?;
@@ -892,6 +921,7 @@ impl AtlasIndexerClient {
 
     pub async fn ao_token_messages_by_tag(
         &self,
+        token: &str,
         source: Option<&str>,
         tag_key: &str,
         tag_value: &str,
@@ -909,15 +939,20 @@ impl AtlasIndexerClient {
                 arrayFilter(x -> x.1 != '', groupArray(tuple(ifNull(t.tag_key, ''), ifNull(t.tag_value, '')))) as tags \
              from ao_token_messages m \
              inner join ao_token_message_tags filter \
-               on filter.source = m.source and filter.block_height = m.block_height and filter.msg_id = m.msg_id \
+               on filter.token = m.token and filter.source = m.source and filter.block_height = m.block_height and filter.msg_id = m.msg_id \
              left join ao_token_message_tags t \
-               on t.source = m.source and t.block_height = m.block_height and t.msg_id = m.msg_id \
-             where filter.tag_key = ? and filter.tag_value = ?{source_clause} \
+               on t.token = m.token and t.source = m.source and t.block_height = m.block_height and t.msg_id = m.msg_id \
+             where m.token = ? and filter.tag_key = ? and filter.tag_value = ?{source_clause} \
              group by m.source, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, m.bundled_in, m.data_size, m.ts \
              order by m.block_height desc, m.msg_id desc \
              limit ?"
         );
-        let mut query = self.client.query(&sql).bind(tag_key).bind(tag_value);
+        let mut query = self
+            .client
+            .query(&sql)
+            .bind(token)
+            .bind(tag_key)
+            .bind(tag_value);
         if let Some(src) = source {
             query = query.bind(src);
         }
@@ -1053,9 +1088,9 @@ async fn ensure_schema(
         "create table if not exists flp_positions(ts DateTime64(3), ticker String, wallet String, eoa String, project String, factor UInt32, amount String) engine=ReplacingMergeTree order by (project, wallet, ts)",
         "create table if not exists delegation_mappings(ts DateTime64(3), height UInt32, tx_id String, wallet_from String, wallet_to String, factor UInt32) engine=ReplacingMergeTree order by (height, tx_id, wallet_from, wallet_to)",
         "create table if not exists atlas_explorer(ts DateTime64(3), height UInt64, tx_count UInt64, eval_count UInt64, transfer_count UInt64, new_process_count UInt64, new_module_count UInt64, active_users UInt64, active_processes UInt64, tx_count_rolling UInt64, processes_rolling UInt64, modules_rolling UInt64) engine=ReplacingMergeTree order by height",
-        "create table if not exists ao_token_messages(ts DateTime64(3), source String, block_height UInt32, block_timestamp UInt64, msg_id String, owner String, recipient String, bundled_in String, data_size String) engine=ReplacingMergeTree order by (source, block_height, msg_id)",
-        "create table if not exists ao_token_message_tags(ts DateTime64(3), source String, block_height UInt32, msg_id String, tag_key String, tag_value String) engine=ReplacingMergeTree order by (source, tag_key, tag_value, block_height, msg_id)",
-        "create table if not exists ao_token_block_state(last_complete_height UInt32, updated_at DateTime64(3)) engine=ReplacingMergeTree order by updated_at",
+        "create table if not exists ao_token_messages(ts DateTime64(3), token String, source String, block_height UInt32, block_timestamp UInt64, msg_id String, owner String, recipient String, bundled_in String, data_size String) engine=ReplacingMergeTree order by (token, source, block_height, msg_id)",
+        "create table if not exists ao_token_message_tags(ts DateTime64(3), token String, source String, block_height UInt32, msg_id String, tag_key String, tag_value String) engine=ReplacingMergeTree order by (token, source, tag_key, tag_value, block_height, msg_id)",
+        "create table if not exists ao_token_block_state(token String, last_complete_height UInt32, updated_at DateTime64(3)) engine=ReplacingMergeTree order by (token, updated_at)",
     ];
     for stmt in stmts {
         client.query(stmt).execute().await?;
@@ -1067,6 +1102,9 @@ async fn ensure_schema(
         "alter table flp_positions add column if not exists ar_amount String after amount",
         "alter table flp_positions modify column project String",
         "alter table delegation_mappings add column if not exists ts DateTime64(3) default now()",
+        "alter table ao_token_messages add column if not exists token String default 'ao'",
+        "alter table ao_token_message_tags add column if not exists token String default 'ao'",
+        "alter table ao_token_block_state add column if not exists token String default 'ao'",
     ];
     for stmt in alters {
         client.query(stmt).execute().await?;
@@ -1451,6 +1489,7 @@ struct AoTokenStatsRow {
 
 #[derive(Row, serde::Deserialize)]
 struct AoTokenStateRow {
+    token: String,
     last_complete_height: u32,
     #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
     updated_at: DateTime<Utc>,
@@ -1561,6 +1600,14 @@ fn protocol_start(protocol: &str) -> u32 {
     match protocol {
         "A" => DATA_PROTOCOL_A_START,
         "B" => DATA_PROTOCOL_B_START,
+        _ => 0,
+    }
+}
+
+fn token_start(token: &str) -> u32 {
+    match token {
+        "ao" => AO_TOKEN_START,
+        "pi" => PI_TOKEN_START,
         _ => 0,
     }
 }

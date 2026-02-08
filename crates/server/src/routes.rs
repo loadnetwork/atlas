@@ -291,8 +291,10 @@ pub async fn get_mainnet_indexing_info() -> Result<Json<Value>, ServerError> {
 }
 
 pub async fn get_ao_token_txs(
+    Path(token): Path<String>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, ServerError> {
+    let token = parse_token(&token)?;
     let limit = params
         .get("limit")
         .and_then(|v| v.parse::<u64>().ok())
@@ -331,6 +333,7 @@ pub async fn get_ao_token_txs(
     let client = AtlasIndexerClient::new().await?;
     let rows: Vec<AoTokenMessage> = client
         .ao_token_messages(
+            &token,
             source.as_deref(),
             action.as_deref(),
             min_qty.as_deref(),
@@ -349,15 +352,20 @@ pub async fn get_ao_token_txs(
     Ok(Json(serde_json::to_value(&rows)?))
 }
 
-pub async fn get_ao_token_tx(Path(msg_id): Path<String>) -> Result<Json<Value>, ServerError> {
+pub async fn get_ao_token_tx(
+    Path((token, msg_id)): Path<(String, String)>,
+) -> Result<Json<Value>, ServerError> {
+    let token = parse_token(&token)?;
     let client = AtlasIndexerClient::new().await?;
-    let rows = client.ao_token_message_by_id(&msg_id).await?;
+    let rows = client.ao_token_message_by_id(&token, &msg_id).await?;
     Ok(Json(serde_json::to_value(&rows)?))
 }
 
 pub async fn get_ao_token_messages_by_tag(
+    Path(token): Path<String>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, ServerError> {
+    let token = parse_token(&token)?;
     let limit = params
         .get("limit")
         .and_then(|v| v.parse::<u64>().ok())
@@ -379,40 +387,47 @@ pub async fn get_ao_token_messages_by_tag(
         .ok_or_else(|| ServerError::from(anyhow!("missing tag value")))?;
     let client = AtlasIndexerClient::new().await?;
     let rows = client
-        .ao_token_messages_by_tag(source.as_deref(), &key, &value, limit)
+        .ao_token_messages_by_tag(&token, source.as_deref(), &key, &value, limit)
         .await?;
     Ok(Json(serde_json::to_value(&rows)?))
 }
 
-pub async fn get_ao_token_indexing_info() -> Result<Json<Value>, ServerError> {
+pub async fn get_ao_token_indexing_info(
+    Path(token): Path<String>,
+) -> Result<Json<Value>, ServerError> {
+    let token = parse_token(&token)?;
     let client = AtlasIndexerClient::new().await?;
-    let info = client.ao_token_indexing_info().await?;
+    let info = client.ao_token_indexing_info(&token).await?;
     Ok(Json(serde_json::to_value(&info)?))
 }
 
 pub async fn get_ao_token_frequency(
+    Path(token): Path<String>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, ServerError> {
+    let token = parse_token(&token)?;
     let limit = params
         .get("limit")
         .and_then(|v| v.parse::<u64>().ok())
         .filter(|v| *v > 0)
         .unwrap_or(25);
     let client = AtlasIndexerClient::new().await?;
-    let info = client.ao_token_frequency(limit).await?;
+    let info = client.ao_token_frequency(&token, limit).await?;
     Ok(Json(serde_json::to_value(&info)?))
 }
 
 pub async fn get_ao_token_richlist(
+    Path(token): Path<String>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, ServerError> {
+    let token = parse_token(&token)?;
     let limit = params
         .get("limit")
         .and_then(|v| v.parse::<u64>().ok())
         .filter(|v| *v > 0)
         .unwrap_or(25);
     let client = AtlasIndexerClient::new().await?;
-    let info = client.ao_token_richlist(limit).await?;
+    let info = client.ao_token_richlist(&token, limit).await?;
     Ok(Json(serde_json::to_value(&info)?))
 }
 
@@ -542,4 +557,15 @@ fn parse_human_amount_to_raw(input: &str) -> Result<String, ServerError> {
         return Ok("0".to_string());
     }
     Ok(trimmed.to_string())
+}
+
+fn parse_token(value: &str) -> Result<String, ServerError> {
+    let token = value.trim().to_ascii_lowercase();
+    if token.is_empty() {
+        return Err(ServerError::from(anyhow!("missing token")));
+    }
+    if token != "ao" && token != "pi" {
+        return Err(ServerError::from(anyhow!("unsupported token")));
+    }
+    Ok(token)
 }
