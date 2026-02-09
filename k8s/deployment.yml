@@ -13,9 +13,12 @@ spec:
       labels:
         app: load-atlas
     spec:
+      nodeSelector:
+        prod-app-worker-group: apps
       containers:
         - name: load-atlas
-          image: localhost:5000/load-atlas:latest
+          image: 157.180.8.39:7000/load-atlas:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
           securityContext:

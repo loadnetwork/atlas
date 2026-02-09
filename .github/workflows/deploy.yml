@@ -12,18 +12,16 @@ jobs:
   deploy:
     permissions:
       contents: read
-    uses: loadnetwork/infra/.github/workflows/reusable-build-redeploy.yml@main
+    uses: loadnetwork/infra/.github/workflows/reusable-build-redeploy-simple.yml@main
     with:
       image_name: load-atlas
-      pod_selector: app=load-atlas
       kube_namespace: business
       runner_labels: '["self-hosted","linux","x64"]'
-      wait_for_pods: true
+      rollout_resources: |
+        deployment/load-atlas
+      cluster_host: ${{ vars.MAIN_CLUSTER_HOST }}
+      cluster_username: ${{ vars.MAIN_CLUSTER_USERNAME }}
     secrets:
       REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
-      MAIN_CLUSTER_USERNAME: ${{ secrets.MAIN_CLUSTER_USERNAME }}
-      MAIN_CLUSTER_PWD: ${{ secrets.MAIN_CLUSTER_PWD }}
-      MAIN_CLUSTER_HOST: ${{ secrets.MAIN_CLUSTER_HOST }}
-      MAIN_CLUSTER_CTX: ${{ secrets.MAIN_CLUSTER_CTX }}
-      INFRA_REPO_TOKEN: ${{ secrets.INFRA_REPO_TOKEN }}
+      CLUSTER_PASSWORD: ${{ secrets.MAIN_CLUSTER_PWD }}

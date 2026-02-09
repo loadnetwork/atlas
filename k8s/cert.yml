@@ -1,0 +1,12 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: lb-load-atlas-tls
+  namespace: business
+spec:
+  secretName: lb-load-atlas-tls
+  issuerRef:
+    name: letsencrypt-apps
+    kind: Issuer
+  dnsNames:
+    - atlas-server.load.network

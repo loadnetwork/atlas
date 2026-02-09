@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: load-atlas
+  namespace: business
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - atlas-server.load.network
+      secretName: lb-load-atlas-tls
+  rules:
+    - host: atlas-server.load.network
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: load-atlas
+                port:
+                  number: 80

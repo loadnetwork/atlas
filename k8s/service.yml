@@ -6,7 +6,6 @@ metadata:
   labels:
     app: load-atlas
 spec:
-  type: ClusterIP
   selector:
     app: load-atlas
   ports:
