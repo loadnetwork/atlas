@@ -543,10 +543,7 @@ impl AtlasIndexerClient {
             .collect())
     }
 
-    pub async fn ao_token_indexing_info(
-        &self,
-        token: &str,
-    ) -> Result<AoTokenIndexingInfo, Error> {
+    pub async fn ao_token_indexing_info(&self, token: &str) -> Result<AoTokenIndexingInfo, Error> {
         let stats = self
             .client
             .query(
@@ -621,21 +618,18 @@ impl AtlasIndexerClient {
         token: &str,
         limit: u64,
     ) -> Result<AoTokenFrequencyInfo, Error> {
-        let action_sql =
-            "select tag_value, count() as cnt \
+        let action_sql = "select tag_value, count() as cnt \
              from ao_token_message_tags \
              where token = ? and tag_key = 'Action' \
              group by tag_value \
              order by cnt desc";
-        let sender_sql =
-            "select tag_value, count() as cnt \
+        let sender_sql = "select tag_value, count() as cnt \
              from ao_token_message_tags \
              where token = ? and tag_key = 'Sender' \
              group by tag_value \
              order by cnt desc \
              limit ?";
-        let recipient_sql =
-            "select tag_value, count() as cnt \
+        let recipient_sql = "select tag_value, count() as cnt \
              from ao_token_message_tags \
              where token = ? and tag_key = 'Recipient' \
              group by tag_value \
