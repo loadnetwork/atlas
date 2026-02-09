@@ -16,6 +16,7 @@ spec:
       containers:
         - name: load-atlas-indexer
           image: 157.180.8.39:7000/load-atlas:latest
+          imagePullPolicy: Always
           command: ["cargo", "run", "--bin", "indexer"]
           securityContext:
             runAsUser: 0
