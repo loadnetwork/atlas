@@ -556,10 +556,7 @@ async fn run_token_worker(clickhouse: Clickhouse, token: TokenConfig) -> Result<
             .max(token.start_height)
             .saturating_add(1);
     }
-    println!(
-        "token indexer {} starting at height {height}",
-        token.label
-    );
+    println!("token indexer {} starting at height {height}", token.label);
     let mut network_tip = fetch_network_height().await.unwrap_or(height as u64);
     loop {
         while height as u64 + ARWEAVE_TIP_SAFE_GAP > network_tip {
@@ -603,31 +600,26 @@ async fn run_token_worker(clickhouse: Clickhouse, token: TokenConfig) -> Result<
                 return Err(err);
             }
         };
-        let process_count = match ingest_token_query(
-            &clickhouse,
-            token,
-            AoTokenQuery::Process,
-            height,
-            "process",
-        )
-        .await
-        {
-            Ok(count) => count,
-            Err(err) => {
-                if is_rate_limit_error(&err)
-                    || is_timeout_error(&err)
-                    || is_retryable_http_error(&err)
-                {
-                    eprintln!(
-                        "token {} process query error height={height} err={err:?}",
-                        token.label
-                    );
-                    sleep(Duration::from_secs(300)).await;
-                    continue;
+        let process_count =
+            match ingest_token_query(&clickhouse, token, AoTokenQuery::Process, height, "process")
+                .await
+            {
+                Ok(count) => count,
+                Err(err) => {
+                    if is_rate_limit_error(&err)
+                        || is_timeout_error(&err)
+                        || is_retryable_http_error(&err)
+                    {
+                        eprintln!(
+                            "token {} process query error height={height} err={err:?}",
+                            token.label
+                        );
+                        sleep(Duration::from_secs(300)).await;
+                        continue;
+                    }
+                    return Err(err);
                 }
-                return Err(err);
-            }
-        };
+            };
 
         let state_row = AoTokenBlockStateRow {
             token: token.label.to_string(),

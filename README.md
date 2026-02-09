@@ -64,7 +64,7 @@ Token messages (ao.TN.1):
 
 Example token filters:
 - `GET /token/ao/txs?source=transfer&action=Transfer&min_amount=1.5&max_amount=10`
-- `GET /token/ao/txs?action=Debit-Ntoken indexer error token=pi start=1638421 err=http status: 504otice&from_ts=1739059000&to_ts=1739062000`
+- `GET /token/ao/txs?action=Debit-Notice`
 - `GET /token/pi/txs?block_min=1638421&block_max=1639000&recipient=<AR_ADDRESS>`
 
 ## Using the workspace crates in Rust
