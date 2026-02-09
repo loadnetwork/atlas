@@ -19,4 +19,4 @@ pub const PI_TOKEN_START: u32 = 1_638_421;
 pub const DATA_PROTOCOL_A_START: u32 = 1_594_020; // Jan 22 2025
 pub const DATA_PROTOCOL_B_START: u32 = 1_616_999; // Feb 25 2025
 // endpoints
-pub const ARWEAVE_GATEWAY: &str = "https://arweave.net"; // "https://frostor.xyz";
+pub const ARWEAVE_GATEWAY: &str = "https://frostor.xyz"; // "https://frostor.xyz";
