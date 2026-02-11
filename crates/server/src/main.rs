@@ -8,7 +8,7 @@ use crate::routes::{
     get_mainnet_indexing_info, get_mainnet_messages_by_tag, get_mainnet_recent_messages,
     get_multi_project_delegators, get_oracle_data_handler, get_oracle_feed,
     get_project_cycle_totals, get_wallet_delegation_mappings_history,
-    get_wallet_delegations_handler, handle_route,
+    get_wallet_delegations_handler, handle_route, parse_set_balance_report,
 };
 use axum::{Router, extract::DefaultBodyLimit, routing::get};
 use common::env::get_env_var;
@@ -81,6 +81,10 @@ async fn main() {
         .route("/token/{token}/info", get(get_ao_token_indexing_info))
         .route("/token/{token}/top/frequency", get(get_ao_token_frequency))
         .route("/token/{token}/top/richlist", get(get_ao_token_richlist))
+        .route(
+            "/codec/parse/set-balances/{msg_id}",
+            get(parse_set_balance_report),
+        )
         .layer(DefaultBodyLimit::max(REQ_SIZE_LIMIT))
         .layer(RequestBodyLimitLayer::new(REQ_SIZE_LIMIT))
         .layer(cors);

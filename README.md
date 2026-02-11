@@ -21,6 +21,7 @@ Base endpoint: https://atlas-server.decent.land
 - `GET /flp/minting/{project}` - returns the latest FLP's cycle `Own-Minting-Report` data
 - `GET /flp/metadata/all` - return a vector of the tracked FLPs and their metadata
 - `GET /flp/{project}/cycles?ticker={ticker}&limit={n}` - returns the total delegated assets for the `ticker`'s oracle (LST) cycle per `project`
+ - `GET /codec/parse/set-balances/{msg_id}` - return a JSON serialized `Action : Set-Balances` of a given msg id from the LSTs oracles.
 
 Legacy network (ao.TN.1) explorer stats:
 - `GET /explorer/blocks?limit=100` - emits the last N indexed blocks.

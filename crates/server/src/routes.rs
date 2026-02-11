@@ -26,6 +26,11 @@ pub async fn handle_route() -> Json<Value> {
     }))
 }
 
+pub async fn parse_set_balance_report(Path(id): Path<String>) -> Result<Json<Value>, ServerError> {
+    let res = parse_flp_balances_setting_res(&id)?;
+    Ok(Json(serde_json::to_value(&res)?))
+}
+
 pub async fn get_wallet_delegations_handler(
     Path(address): Path<String>,
 ) -> Result<Json<Value>, ServerError> {
