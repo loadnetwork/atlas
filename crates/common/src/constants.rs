@@ -34,7 +34,9 @@ fn load_arweave_gateway() -> String {
     let path = get_env_var("ATLAS_CONFIG").unwrap_or_else(|_| "atlas.toml".into());
     let contents = match fs::read_to_string(&path) {
         Ok(contents) => contents,
-        Err(err) if err.kind() == ErrorKind::NotFound => return DEFAULT_ARWEAVE_GATEWAY.to_string(),
+        Err(err) if err.kind() == ErrorKind::NotFound => {
+            return DEFAULT_ARWEAVE_GATEWAY.to_string();
+        }
         Err(err) => {
             eprintln!("failed to read atlas config {path}: {err}");
             return DEFAULT_ARWEAVE_GATEWAY.to_string();

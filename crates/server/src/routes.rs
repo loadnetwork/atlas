@@ -12,8 +12,7 @@ use axum::{
 };
 use chrono::{NaiveDate, Utc};
 use common::{
-    constants::arweave_gateway, env::get_env_var, gql::OracleStakers,
-    minting::get_flp_own_minting_report, projects::Project,
+    env::get_env_var, gql::OracleStakers, minting::get_flp_own_minting_report, projects::Project,
 };
 use flp::csv_parser::parse_flp_balances_setting_res;
 use flp::json_parser::parse_own_minting_report;
@@ -72,8 +71,7 @@ pub async fn handle_route() -> Json<Value> {
         "status": "running",
         "name": "atlas-server",
         "version": env!("CARGO_PKG_VERSION"),
-        "config": config,
-        "arweave_gateway": arweave_gateway()
+        "config": config
     }))
 }
 
