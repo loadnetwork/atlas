@@ -1,0 +1,8 @@
+PRIMARY_ARWEAVE_GATEWAY = "https://arweave.net"
+
+[indexers]
+ao = true
+pi = false
+flp = true
+explorer = true
+mainnet = true

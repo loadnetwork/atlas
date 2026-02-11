@@ -12,3 +12,4 @@ ureq = { version = "3.1.4", features=["rustls", "json"]}
 anyhow = {version = "1.0.100"}
 csv = {version = "1.4.0"}
 dotenvy = {version = "0.15.7"}
+toml = {version = "0.8.23"}

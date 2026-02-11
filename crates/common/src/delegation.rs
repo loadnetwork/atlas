@@ -1,4 +1,4 @@
-use crate::constants::{AO_AUTHORITY, ARWEAVE_GATEWAY, DELEGATION_PID};
+use crate::constants::{AO_AUTHORITY, DELEGATION_PID, arweave_gateway};
 use crate::projects::INTERNAL_PI_PID;
 use anyhow::{Error, anyhow};
 use serde::{Deserialize, Serialize};
@@ -52,7 +52,7 @@ pub fn get_user_delegation_txid(last_delegation_txid: &str) -> Result<String, Er
         "variables": {}
     });
 
-    let req = ureq::post(format!("{ARWEAVE_GATEWAY}/graphql"))
+    let req = ureq::post(format!("{}/graphql", arweave_gateway()))
         .send_json(body)?
         .body_mut()
         .read_to_string()?;
@@ -113,7 +113,7 @@ pub fn get_user_last_delegation_txid(address: &str) -> Result<Vec<String>, Error
         "variables": {}
     });
 
-    let req = ureq::post(format!("{ARWEAVE_GATEWAY}/graphql"))
+    let req = ureq::post(format!("{}/graphql", arweave_gateway()))
         .send_json(body)?
         .body_mut()
         .read_to_string()?;
@@ -225,7 +225,7 @@ $afterclause
         "variables": {}
     });
 
-    let req = ureq::post(format!("{ARWEAVE_GATEWAY}/graphql"))
+    let req = ureq::post(format!("{}/graphql", arweave_gateway()))
         .send_json(body)?
         .body_mut()
         .read_to_string()?;

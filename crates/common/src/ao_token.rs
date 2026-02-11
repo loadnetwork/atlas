@@ -1,4 +1,4 @@
-use crate::constants::{AO_AUTHORITY, AO_TOKEN_PROCESS, ARWEAVE_GATEWAY};
+use crate::constants::{AO_AUTHORITY, AO_TOKEN_PROCESS, arweave_gateway};
 use anyhow::{Error, anyhow};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -110,7 +110,7 @@ query $querylabel {
         "variables": {}
     });
 
-    let req = ureq::post(format!("{ARWEAVE_GATEWAY}/graphql"))
+    let req = ureq::post(format!("{}/graphql", arweave_gateway()))
         .send_json(body)?
         .body_mut()
         .read_to_string()?;

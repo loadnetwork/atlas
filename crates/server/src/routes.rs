@@ -11,18 +11,69 @@ use axum::{
     extract::{Path, Query},
 };
 use chrono::{NaiveDate, Utc};
-use common::{gql::OracleStakers, minting::get_flp_own_minting_report, projects::Project};
+use common::{
+    constants::arweave_gateway, env::get_env_var, gql::OracleStakers,
+    minting::get_flp_own_minting_report, projects::Project,
+};
 use flp::csv_parser::parse_flp_balances_setting_res;
 use flp::json_parser::parse_own_minting_report;
 use flp::wallet::get_wallet_delegations;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
+use std::{fs, io::ErrorKind};
+
+#[derive(Deserialize, Serialize, Default)]
+struct AtlasConfig {
+    #[serde(default)]
+    indexers: AtlasIndexersConfig,
+    #[serde(rename = "PRIMARY_ARWEAVE_GATEWAY", alias = "primary_arweave_gateway")]
+    primary_arweave_gateway: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Default)]
+struct AtlasIndexersConfig {
+    ao: Option<bool>,
+    pi: Option<bool>,
+    flp: Option<bool>,
+    explorer: Option<bool>,
+    mainnet: Option<bool>,
+}
+
+fn load_atlas_config() -> Option<AtlasConfig> {
+    let path = get_env_var("ATLAS_CONFIG").ok();
+    if let Some(path) = path {
+        return read_atlas_config(&path);
+    }
+    read_atlas_config("atlas.toml").or_else(|| read_atlas_config("../atlas.toml"))
+}
+
+fn read_atlas_config(path: &str) -> Option<AtlasConfig> {
+    let contents = match fs::read_to_string(path) {
+        Ok(contents) => contents,
+        Err(err) if err.kind() == ErrorKind::NotFound => return None,
+        Err(err) => {
+            eprintln!("failed to read atlas config {path}: {err}");
+            return None;
+        }
+    };
+    match toml::from_str::<AtlasConfig>(&contents) {
+        Ok(config) => Some(config),
+        Err(err) => {
+            eprintln!("failed to parse atlas config {path}: {err}");
+            None
+        }
+    }
+}
 
 pub async fn handle_route() -> Json<Value> {
+    let config = load_atlas_config();
     Json(serde_json::json!({
         "status": "running",
         "name": "atlas-server",
-        "version": env!("CARGO_PKG_VERSION")
+        "version": env!("CARGO_PKG_VERSION"),
+        "config": config,
+        "arweave_gateway": arweave_gateway()
     }))
 }
 

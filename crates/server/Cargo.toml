@@ -8,6 +8,7 @@ default-run = "server"
 serde = {workspace = true}
 serde_json = {workspace = true}
 anyhow = {workspace = true}
+toml = {workspace = true}
 common = {path = "../common"}
 flp = {path = "../flp"}
 axum = "0.8.4"

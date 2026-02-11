@@ -1,6 +1,6 @@
 use crate::constants::{
-    AO_AUTHORITY, ARWEAVE_GATEWAY, DAI_ORACLE_PID, DAI_STAKING_ADDRESS, STETH_ORACLE_PID,
-    STETH_STAKING_ADDRESS, USDS_ORACLE_PID, USDS_STAKING_ADDRESS,
+    AO_AUTHORITY, DAI_ORACLE_PID, DAI_STAKING_ADDRESS, STETH_ORACLE_PID, STETH_STAKING_ADDRESS,
+    USDS_ORACLE_PID, USDS_STAKING_ADDRESS, arweave_gateway,
 };
 pub use crate::delegation::{get_user_delegation_txid, get_user_last_delegation_txid};
 use anyhow::{Error, anyhow};
@@ -161,7 +161,7 @@ impl OracleStakers {
     }
 
     pub fn send(mut self) -> Result<Self, Error> {
-        let url = format!("{ARWEAVE_GATEWAY}/graphql");
+        let url = format!("{}/graphql", arweave_gateway());
         let req = ureq::post(url)
             .send_json(self.query.clone())?
             .body_mut()

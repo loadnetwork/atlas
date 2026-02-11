@@ -64,34 +64,54 @@ impl Indexer {
     pub async fn run(&self) -> Result<()> {
         self.clickhouse.ensure().await?;
         // self.reindex_mainnet_gap(1_821_500).await?;
-        self.spawn_explorer_bridge().await?;
-        self.spawn_mainnet_indexer().await?;
-        self.spawn_ao_token_indexer().await?;
-        self.rebuild_mainnet_explorer().await?;
-        self.spawn_mainnet_explorer_tail().await?;
-        // self.spawn_backfill();
-        println!("indexer ready with tickers {:?}", self.config.tickers);
-        if let Err(err) = self.run_once().await {
-            eprintln!("index cycle error: {err:?}");
+        if self.config.indexers.explorer {
+            self.spawn_explorer_bridge().await?;
         }
-        let mut interval = tokio::time::interval(self.config.interval);
-        loop {
-            println!("waiting {:?}", self.config.interval);
-            interval.tick().await;
-            println!("starting new cycle");
+        if self.config.indexers.mainnet {
+            self.spawn_mainnet_indexer().await?;
+        }
+        if self.config.indexers.explorer {
+            self.rebuild_mainnet_explorer().await?;
+            self.spawn_mainnet_explorer_tail().await?;
+        }
+        if self.config.indexers.ao || self.config.indexers.pi {
+            self.spawn_ao_token_indexer().await?;
+        }
+        // self.spawn_backfill();
+        if self.config.indexers.flp {
+            println!("indexer ready with tickers {:?}", self.config.tickers);
+        } else {
+            println!("indexer ready");
+        }
+        if self.config.indexers.flp {
             if let Err(err) = self.run_once().await {
                 eprintln!("index cycle error: {err:?}");
             }
+            let mut interval = tokio::time::interval(self.config.interval);
+            loop {
+                println!("waiting {:?}", self.config.interval);
+                interval.tick().await;
+                println!("starting new cycle");
+                if let Err(err) = self.run_once().await {
+                    eprintln!("index cycle error: {err:?}");
+                }
+            }
         }
+        futures::future::pending::<()>().await;
+        Ok(())
     }
 
     async fn run_once(&self) -> Result<()> {
-        if let Err(err) = self.index_delegation_mappings().await {
-            eprintln!("delegation mapping error: {err:?}");
+        if self.config.indexers.flp {
+            if let Err(err) = self.index_delegation_mappings().await {
+                eprintln!("delegation mapping error: {err:?}");
+            }
         }
-        for ticker in &self.config.tickers {
-            if let Err(err) = self.index_ticker(ticker).await {
-                eprintln!("ticker {ticker} error: {err:?}");
+        if self.config.indexers.flp {
+            for ticker in &self.config.tickers {
+                if let Err(err) = self.index_ticker(ticker).await {
+                    eprintln!("ticker {ticker} error: {err:?}");
+                }
             }
         }
         Ok(())
@@ -147,18 +167,21 @@ impl Indexer {
     }
 
     async fn spawn_ao_token_indexer(&self) -> Result<()> {
-        let tokens = [
-            TokenConfig {
+        let mut tokens = Vec::new();
+        if self.config.indexers.ao {
+            tokens.push(TokenConfig {
                 label: "ao",
                 process_id: AO_TOKEN_PROCESS,
                 start_height: AO_TOKEN_START,
-            },
-            TokenConfig {
+            });
+        }
+        if self.config.indexers.pi {
+            tokens.push(TokenConfig {
                 label: "pi",
                 process_id: PI_TOKEN_PROCESS,
                 start_height: PI_TOKEN_START,
-            },
-        ];
+            });
+        }
         for token in tokens {
             let clickhouse = self.clickhouse.clone();
             tokio::spawn(async move {

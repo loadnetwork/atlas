@@ -1,4 +1,4 @@
-use crate::constants::{AO_AUTHORITY, ARWEAVE_GATEWAY};
+use crate::constants::{AO_AUTHORITY, arweave_gateway};
 use anyhow::{Error, anyhow};
 use serde_json::{Value, json};
 
@@ -48,7 +48,7 @@ pub fn get_flp_own_minting_report(flp_id: &str) -> Result<String, Error> {
         "variables": {}
     });
 
-    let req = ureq::post(format!("{ARWEAVE_GATEWAY}/graphql"))
+    let req = ureq::post(format!("{}/graphql", arweave_gateway()))
         .send_json(body)?
         .body_mut()
         .read_to_string()?;
