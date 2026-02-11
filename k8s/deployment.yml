@@ -23,6 +23,18 @@ spec:
             - containerPort: 8000
           securityContext:
             runAsUser: 0
+          env:
+            - name: ATLAS_CONFIG
+              value: /app/atlas.toml
           envFrom:
             - secretRef:
                 name: load-atlas-secret
+          volumeMounts:
+            - name: atlas-config
+              mountPath: /app/atlas.toml
+              subPath: atlas.toml
+              readOnly: true
+      volumes:
+        - name: atlas-config
+          configMap:
+            name: load-atlas-config
